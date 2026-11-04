@@ -1,0 +1,22 @@
+# Local development database only. Never use these credentials anywhere else.
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: kiota-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kiota
+      POSTGRES_PASSWORD: kiota_dev_password
+      POSTGRES_DB: kiota
+    ports:
+      - "5432:5432"
+    volumes:
+      - kiota-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiota -d kiota"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  kiota-db-data:

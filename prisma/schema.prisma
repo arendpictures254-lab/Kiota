@@ -1,0 +1,13 @@
+// Kiota database schema.
+// Rules (see CLAUDE.md): every school-data table has school_id with row-level security,
+// money is integer cents, payments/receipts/reversals are append-only.
+// No models yet: each module adds its data model, with tests, before any screens.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

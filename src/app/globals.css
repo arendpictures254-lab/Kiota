@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/*
+ * Kiota brand tokens.
+ * Use these through Tailwind utilities (bg-teal, text-ink, bg-cream, text-status-overdue...).
+ * Never hard-code hex values in components.
+ */
+@theme {
+  /* Brand */
+  --color-teal: #1f5f63; /* primary */
+  --color-egg-blue: #a9dcd6;
+  --color-light-twig: #c9a27a;
+  --color-twig: #7a5634;
+  --color-cream: #fbf7f0; /* background */
+  --color-ink: #1e2422; /* text */
+
+  /* Semantic aliases */
+  --color-primary: var(--color-teal);
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-ink);
+
+  /* Fee and status colours */
+  --color-status-paid: #2e8b57;
+  --color-status-due: #d9921a;
+  --color-status-overdue: #c0392b;
+
+  /* Fonts (CSS variables set by next/font in src/app/layout.tsx) */
+  --font-heading: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+  }
+}
