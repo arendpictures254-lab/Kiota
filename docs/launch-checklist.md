@@ -31,6 +31,38 @@ Add to this list whenever something must happen before launch. Tick items off wi
       in production unless `ALLOW_CONSOLE_SMS=1`, which is for staging only: turn it off before
       real users arrive.
 
+## Before real money flows (fees and M-Pesa)
+
+- [ ] **Daraja Go Live for the pilot school's Paybill.** Production consumer key/secret, passkey,
+      initiator and security credential from the Daraja portal; environment set to **Live**;
+      **Register with Safaricom** pressed. See docs/mpesa.md.
+- [ ] **End-to-end test with real money on the live Paybill:** a KES 10 Paybill payment with the
+      admission number, a wrong account number (lands in suspense, then assign it), an STK prompt,
+      and one reversal. Check each receipt and the Director's notification.
+- [ ] **Test in the Daraja sandbox first** through a Cloudflare quick tunnel (docs/mpesa.md). So far
+      M-Pesa was tested only with the local simulator: no call has been made to Safaricom yet.
+- [ ] **`CREDENTIALS_ENCRYPTION_KEY`** generated for production (`openssl rand -hex 32`), stored in a
+      password manager **separately from the database backups**. Losing it means re-entering every
+      school's Daraja credentials; leaking it plus a backup exposes them.
+- [ ] **`ALLOW_MPESA_SIMULATOR` is not set** in production (the simulator driver refuses to run
+      there without it).
+- [ ] **Restrict the callback URLs to Safaricom's published callback IP addresses** in Caddy, as a
+      second layer on top of the secret token and the transaction status check.
+- [ ] **Opening balances checked against the school's books** before pressing "Post opening
+      balances" (it can only be done once; corrections afterwards are one-off charges or credits).
+- [ ] **Vote head priority order agreed with the Bursar and auditor** (it decides how every payment
+      is split), and the "collected for a term" rule (older balances are cleared first) explained.
+- [ ] **Daily reconciliation in the first weeks:** compare the M-Pesa statement from the Safaricom
+      org portal with Kiota's daily collection report, and clear suspense every day.
+- [ ] **Print a thermal receipt on the pilot school's own printer** (80 mm) and an A4 receipt, and
+      upload the school's crest (School setup → School crest).
+- [ ] **Fee reminders:** "Send reminder" on the defaulters list is a stub (it records the request in
+      the audit log). Wire it to SMS/WhatsApp before telling the school it works.
+- [ ] **Back-dated payments:** payments dated more than 120 days ago are refused; decide with the
+      school how those are entered (today there is no override).
+- [ ] **Receipt share links** (`/r/<token>`) never expire. Decide whether they should, before
+      sending them to parents.
+
 ## Public website
 
 - [ ] **Lawyer review of the privacy policy and terms** (kiota.app/privacy and /terms are marked

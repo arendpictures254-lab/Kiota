@@ -14,6 +14,10 @@ import {
   TextArea,
 } from "@/components/ui";
 import { deps } from "@/lib/actions";
+import { withContext } from "@/lib/db-core";
+import { kes as kesFromCents } from "@/lib/fees/allocation";
+import { studentPosition } from "@/lib/fees/ledger";
+import { ctxOf } from "@/lib/service-kit";
 import { formatPhone } from "@/lib/phone";
 import { getStructure } from "@/lib/structure/service";
 import { LANGUAGES, RELATIONSHIPS, STATUSES, fullName } from "@/lib/students/rules";
@@ -58,6 +62,11 @@ async function Student({ params, searchParams }: Props) {
   if (!s) notFound();
 
   const canEdit = actor.permissions.has("students.edit");
+  const canFees = actor.permissions.has("fees.view") || actor.permissions.has("fees.collect");
+  const feeBalance = canFees
+    ? await withContext(deps.db, ctxOf(actor), (tx) => studentPosition(tx, s.id))
+    : null;
+  const feePhone = s.guardians.find((g) => g.receivesFees)?.user.phone;
   const canMedical = actor.permissions.has("students.medical.view");
   const senior = s.class.level.key === "senior";
   const structure = senior && canEdit ? await getStructure(deps, actor) : null;
@@ -131,6 +140,42 @@ async function Student({ params, searchParams }: Props) {
             <Row label="Medical notes">{s.medical?.medicalNotes}</Row>
             <Row label="Allergies">{s.medical?.allergies}</Row>
           </dl>
+        </Card>
+      ) : null}
+
+      {feeBalance ? (
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-heading text-lg font-bold">Fees</h2>
+            <span
+              className={`font-heading text-2xl font-bold ${feeBalance.balanceCents > 0 ? "text-status-overdue" : "text-status-paid"}`}
+            >
+              {feeBalance.balanceCents < 0
+                ? `${kesFromCents(-feeBalance.balanceCents)} credit`
+                : kesFromCents(feeBalance.balanceCents)}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {actor.permissions.has("fees.collect") ? (
+              <ButtonLink href={`/dashboard/fees/pay?student=${s.id}`} variant="secondary">
+                Record a payment
+              </ButtonLink>
+            ) : null}
+            {actor.permissions.has("fees.collect") && feePhone ? (
+              <ButtonLink
+                href={`/dashboard/fees/mpesa?adm=${encodeURIComponent(s.admissionNumber)}&phone=${encodeURIComponent(feePhone)}`}
+                variant="secondary"
+              >
+                Send M-Pesa prompt
+              </ButtonLink>
+            ) : null}
+            <a
+              href={`/files/statements/${s.id}`}
+              className="text-center text-sm font-semibold text-teal hover:underline"
+            >
+              Fee statement (PDF)
+            </a>
+          </div>
         </Card>
       ) : null}
 

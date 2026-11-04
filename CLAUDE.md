@@ -55,6 +55,13 @@ src/app/site/                 Public site pages (kiota.app); never reached direc
 src/proxy.ts                  Host routing: kiota.app = site, app.kiota.app = app (Next 16 "proxy")
 src/lib/hosts.ts              SITE_URL / APP_URL and which paths belong to which address
 src/lib/demo/service.ts       "Book a demo" requests (platform level, admin-only reading)
+src/lib/fees/                 Fees: allocation.ts (pure ledger maths), ledger.ts, payments.ts
+                              (payments, receipts, reversals), setup.ts, invoicing.ts, reports.ts,
+                              receipts.ts + pdf.ts (receipts and statements)
+src/lib/mpesa/                Daraja interface (daraja.ts), simulator, service.ts (callbacks, STK)
+src/app/api/pay/[token]/      Public Daraja callback routes (secret token in the URL)
+src/app/r/[token]/            Public receipt share link
+assets/fonts/                 Brand fonts used in PDFs (OFL licensed)
 src/app/globals.css           Tailwind import and Kiota design tokens
 src/components/               Shared UI (ui.tsx: Button, Field, Card, Shell...)
 src/lib/db.ts                 App database access (kiota_app role): db(ctx), inContext(ctx, fn)
@@ -116,6 +123,17 @@ Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL ar
   `select` explicit columns from `users` (only id, phone, is_platform_admin, created_at).
 - Policy helper functions are PL/pgSQL (plans are cached). Keep new ones PL/pgSQL; a SQL
   `SECURITY DEFINER` function is re-planned on every call and made student queries 6x slower.
+- **Money:** the student ledger (`ledger_entries` + `ledger_lines` per vote head) is append-only;
+  the balance is always the sum of the ledger. Positive cents = owed, negative = paid/credited;
+  a line with no vote head is unallocated credit. Payments are allocated by vote head priority
+  (`allocatePayment`), overpayments become credit applied to later bills. Never UPDATE or DELETE
+  invoices, ledger rows, payments, receipts or reversals (grants and triggers refuse it): correct
+  with a reversal (`reversePayment`) or a new entry. Receipt numbers come from
+  `receipt_counters` inside the payment's transaction (gap-free).
+- **M-Pesa:** callbacks are unsigned. Look the school up by the URL token, store each transaction
+  once (unique transaction ID), confirm with Daraja before posting, and run as the school's hidden
+  "Automatic payments" member (role `system_payments`). Credentials are encrypted with
+  `CREDENTIALS_ENCRYPTION_KEY` (src/lib/crypto.ts). Test with `npm run mpesa:simulate`.
 - Bulk work (imports) uses set-based SQL (createMany, `jsonb_to_recordset`, in-database loops),
   not one round trip per row.
 - Guardians are platform users found by phone (`app_upsert_guardian_link`). A school stores its
@@ -177,6 +195,7 @@ npm run db:migrate     # create/apply a migration after editing prisma/schema.pr
 npm run db:generate    # regenerate the Prisma client (Prisma 7 does not do it on migrate)
 npm run db:studio      # browse the database
 npm run samples        # rebuild docs/samples/*.xlsx after changing import columns
+npm run mpesa:simulate -- c2b --account BA/2025/001 --amount 5000   # fake M-Pesa (docs/mpesa.md)
 ```
 
 Checks (run before every commit; Postgres must be running):

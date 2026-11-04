@@ -14,7 +14,7 @@ export function RoleOptions({
       <legend className={hideLegend ? "sr-only" : "mb-1.5 text-sm font-semibold text-ink"}>
         Roles
       </legend>
-      {BUILT_IN_ROLES.map((role) => (
+      {BUILT_IN_ROLES.filter((r) => !r.hidden).map((role) => (
         <Checkbox
           key={role.key}
           name="roles"

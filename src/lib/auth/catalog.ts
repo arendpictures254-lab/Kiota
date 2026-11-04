@@ -22,9 +22,10 @@ export const PERMISSIONS = {
   "structure.manage": "Set up levels, classes, streams, houses, terms and subjects",
   "import.run": "Import students and guardians from Excel",
   "fees.view": "See fee balances, invoices and receipts",
-  "fees.manage": "Set up fee items and fee structures",
-  "payments.record": "Record payments and issue receipts",
-  "payments.reverse": "Reverse payments and receipts",
+  "fees.setup": "Set up vote heads, fee structures, discounts and bursaries; generate invoices",
+  "fees.collect": "Record payments and issue receipts",
+  "fees.reverse": "Reverse payments and receipts",
+  "fees.reports": "See fee reports and export them",
   "academics.view": "See marks, report cards and analytics",
   "marks.enter": "Enter marks for assigned classes and subjects",
   "marks.signoff": "Sign off marks for a class",
@@ -53,6 +54,8 @@ export type BuiltInRole = {
   name: string;
   description: string;
   permissions: readonly PermissionKey[];
+  /** Not offered to people: used by Kiota itself (e.g. automatic M-Pesa payments). */
+  hidden?: boolean;
 };
 
 export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
@@ -71,6 +74,7 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
       "staff.view",
       "audit.view",
       "fees.view",
+      "fees.reports",
       "academics.view",
       "marks.signoff",
       "marks.unlock",
@@ -91,9 +95,10 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
     permissions: [
       "school.view",
       "fees.view",
-      "fees.manage",
-      "payments.record",
-      "payments.reverse",
+      "fees.setup",
+      "fees.collect",
+      "fees.reverse",
+      "fees.reports",
       "students.view",
     ],
   },
@@ -101,7 +106,7 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
     key: "accounts_clerk",
     name: "Accounts clerk",
     description: "Records payments and issues receipts.",
-    permissions: ["school.view", "fees.view", "payments.record", "students.view"],
+    permissions: ["school.view", "fees.view", "fees.collect", "students.view"],
   },
   {
     key: "class_teacher",
@@ -141,6 +146,13 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
     name: "Storekeeper",
     description: "Stock in, stock out, uniform issue and food store usage.",
     permissions: ["school.view", "stores.manage"],
+  },
+  {
+    key: "system_payments",
+    name: "Automatic payments",
+    description: "Kiota itself, posting confirmed M-Pesa payments.",
+    permissions: ["fees.view", "fees.collect", "students.view"],
+    hidden: true,
   },
   {
     key: "gate_guard",

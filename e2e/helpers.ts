@@ -32,4 +32,5 @@ export async function signIn(page: Page, localPhone: string, e164: string) {
   await expect(page.getByLabel("6-digit code")).toBeVisible();
   await page.getByLabel("6-digit code").fill(await latestCode(e164, since));
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith("/sign-in"));
 }

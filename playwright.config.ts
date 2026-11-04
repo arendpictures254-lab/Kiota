@@ -22,11 +22,19 @@ export const E2E_ENV = {
   SITE_URL: `http://localhost:${PORT}`,
   APP_URL: `http://app.localhost:${PORT}`,
   ALLOW_CONSOLE_SMS: "1",
+  // Several tests sign in as the same seeded people.
+  OTP_MAX_PER_WINDOW: "50",
+  // M-Pesa runs against the local simulator (scripts/mpesa-simulate.ts) with its own store.
+  CREDENTIALS_ENCRYPTION_KEY: "e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0",
+  ALLOW_MPESA_SIMULATOR: "1",
+  MPESA_SIM_DIR: ".dev/mpesa-sim-e2e",
 };
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  // One test at a time: tests share seeded people, and a new sign-in code replaces the old one.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",

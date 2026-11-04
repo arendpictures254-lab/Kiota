@@ -171,7 +171,7 @@ export function Shell({
 }) {
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-ink/10 bg-cream">
+      <header className="border-b border-ink/10 bg-cream print:hidden">
         <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/brand/kiota-icon.svg" alt="" width={28} height={28} />
@@ -182,7 +182,7 @@ export function Shell({
       </header>
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
         {back ? (
-          <Link href={back.href} className="text-sm font-semibold text-teal">
+          <Link href={back.href} className="text-sm font-semibold text-teal print:hidden">
             ← {back.label}
           </Link>
         ) : null}

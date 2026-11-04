@@ -48,6 +48,7 @@ model School {
   dormitories   Dormitory[]
   academicYears AcademicYear[]
   importBatches ImportBatch[]
+  voteHeads     VoteHead[]
 
   @@map("schools")
 }
@@ -254,10 +255,11 @@ model Level {
   nextLevelKey String?  @map("next_level_key")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  classes  Class[]
-  subjects Subject[]
-  pathways Pathway[]
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classes       Class[]
+  subjects      Subject[]
+  pathways      Pathway[]
+  feeStructures FeeStructure[]
 
   @@unique([schoolId, key])
   @@unique([schoolId, id])
@@ -356,9 +358,11 @@ model Term {
   endDate        DateTime  @map("end_date") @db.Date
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  academicYear AcademicYear @relation(fields: [schoolId, academicYearId], references: [schoolId, id], onDelete: Restrict)
+  academicYear  AcademicYear   @relation(fields: [schoolId, academicYearId], references: [schoolId, id], onDelete: Restrict)
+  feeStructures FeeStructure[]
 
   @@unique([academicYearId, name])
+  @@unique([schoolId, id])
   @@map("terms")
 }
 
@@ -639,4 +643,362 @@ model DemoRequest {
 
   @@index([ipHash, createdAt])
   @@map("demo_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Fees and finance (all school-owned; money in integer cents)
+// ---------------------------------------------------------------------------
+
+/// A vote head: what money is for (tuition, boarding...). Payments are allocated to vote heads
+/// in priority order (1 = paid first).
+model VoteHead {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  priority  Int
+  /// The vote head opening balances (arrears) are posted to. Usually paid first.
+  isArrears Boolean  @default(false) @map("is_arrears")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  feeItems      FeeItem[]
+  discountRules DiscountRule[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("vote_heads")
+}
+
+/// A fee item (e.g. "Tuition fee") belongs to one vote head.
+model FeeItem {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  voteHeadId String   @map("vote_head_id") @db.Uuid
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  voteHead          VoteHead           @relation(fields: [schoolId, voteHeadId], references: [schoolId, id], onDelete: Restrict)
+  feeStructureLines FeeStructureLine[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("fee_items")
+}
+
+enum FeeAppliesTo {
+  boarder
+  day
+}
+
+/// What a student of one level pays in one term, as a boarder or a day scholar.
+model FeeStructure {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String       @map("school_id") @db.Uuid
+  termId    String       @map("term_id") @db.Uuid
+  levelId   String       @map("level_id") @db.Uuid
+  appliesTo FeeAppliesTo @map("applies_to")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  term         Term               @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
+  level        Level              @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  lines        FeeStructureLine[]
+  installments FeeInstallment[]
+
+  @@unique([termId, levelId, appliesTo])
+  @@unique([schoolId, id])
+  @@map("fee_structures")
+}
+
+model FeeStructureLine {
+  id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String @map("school_id") @db.Uuid
+  feeStructureId String @map("fee_structure_id") @db.Uuid
+  feeItemId      String @map("fee_item_id") @db.Uuid
+  amountCents    Int    @map("amount_cents")
+
+  structure FeeStructure @relation(fields: [schoolId, feeStructureId], references: [schoolId, id], onDelete: Cascade)
+  feeItem   FeeItem      @relation(fields: [schoolId, feeItemId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([feeStructureId, feeItemId])
+  @@map("fee_structure_lines")
+}
+
+/// Instalment plan of a fee structure: share of the term's fees due by each date.
+model FeeInstallment {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  feeStructureId String   @map("fee_structure_id") @db.Uuid
+  dueDate        DateTime @map("due_date") @db.Date
+  /// Share of the invoice due by this date, in basis points (5000 = 50%).
+  percentBp      Int      @map("percent_bp")
+
+  structure FeeStructure @relation(fields: [schoolId, feeStructureId], references: [schoolId, id], onDelete: Cascade)
+
+  @@map("fee_installments")
+}
+
+/// Rule-based discounts. Today: sibling discounts (the Nth child of a family and later).
+model DiscountRule {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  name            String
+  /// Applies to the Nth child of a family and every child after (2 = second child onwards).
+  siblingPosition Int      @map("sibling_position")
+  percentBp       Int      @map("percent_bp")
+  voteHeadId      String   @map("vote_head_id") @db.Uuid
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  voteHead VoteHead @relation(fields: [schoolId, voteHeadId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, name])
+  @@map("discount_rules")
+}
+
+/// A bursary or scholarship for one student. Applied when term invoices are generated.
+model Bursary {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  studentId   String   @map("student_id") @db.Uuid
+  /// Null = every term.
+  termId      String?  @map("term_id") @db.Uuid
+  kind        String
+  sponsorName String   @map("sponsor_name")
+  /// "full", "percent" or "amount".
+  coverage    String
+  percentBp   Int?     @map("percent_bp")
+  amountCents Int?     @map("amount_cents")
+  /// Null = spread over all vote heads of the invoice.
+  voteHeadId  String?  @map("vote_head_id") @db.Uuid
+  active      Boolean  @default(true)
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("bursaries")
+}
+
+/// A term invoice. Append-only.
+model Invoice {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  studentId      String   @map("student_id") @db.Uuid
+  termId         String   @map("term_id") @db.Uuid
+  feeStructureId String   @map("fee_structure_id") @db.Uuid
+  totalCents     Int      @map("total_cents")
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([studentId, termId])
+  @@map("invoices")
+}
+
+enum LedgerEntryType {
+  invoice
+  charge
+  payment
+  discount
+  bursary
+  opening_balance
+  reversal
+  credit_applied
+}
+
+/// The student ledger. Append-only. Positive = the student owes more; negative = paid or credited.
+/// The balance is always SUM(amount_cents), never a stored number.
+model LedgerEntry {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String          @map("school_id") @db.Uuid
+  studentId       String          @map("student_id") @db.Uuid
+  type            LedgerEntryType
+  amountCents     Int             @map("amount_cents")
+  termId          String?         @map("term_id") @db.Uuid
+  description     String
+  invoiceId       String?         @map("invoice_id") @db.Uuid
+  paymentId       String?         @map("payment_id") @db.Uuid
+  reversesEntryId String?         @map("reverses_entry_id") @db.Uuid
+  createdById     String          @map("created_by_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  lines LedgerLine[]
+
+  @@unique([schoolId, id])
+  @@index([studentId, createdAt])
+  @@index([schoolId, type, createdAt])
+  @@map("ledger_entries")
+}
+
+/// How a ledger entry splits over vote heads. vote_head_id NULL = unallocated credit.
+model LedgerLine {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String  @map("school_id") @db.Uuid
+  entryId     String  @map("entry_id") @db.Uuid
+  studentId   String  @map("student_id") @db.Uuid
+  voteHeadId  String? @map("vote_head_id") @db.Uuid
+  amountCents Int     @map("amount_cents")
+
+  entry LedgerEntry @relation(fields: [schoolId, entryId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([studentId, voteHeadId])
+  @@map("ledger_lines")
+}
+
+enum PaymentMethod {
+  mpesa
+  cash
+  bank
+  cheque
+}
+
+/// A payment. Append-only: corrected only by a reversal.
+model Payment {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId           String        @map("school_id") @db.Uuid
+  studentId          String        @map("student_id") @db.Uuid
+  method             PaymentMethod
+  amountCents        Int           @map("amount_cents")
+  /// M-Pesa transaction ID, bank slip or cheque number. Unique per school and method.
+  reference          String?
+  payerName          String?       @map("payer_name")
+  payerPhone         String?       @map("payer_phone")
+  paidAt             DateTime      @map("paid_at") @db.Timestamptz(3)
+  receivedById       String        @map("received_by_id") @db.Uuid
+  mpesaTransactionId String?       @unique @map("mpesa_transaction_id") @db.Uuid
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  receipt  Receipt?
+  reversal Reversal?
+
+  @@unique([schoolId, method, reference])
+  @@unique([schoolId, id])
+  @@index([schoolId, paidAt])
+  @@map("payments")
+}
+
+/// One receipt per payment, numbered without gaps per school. Append-only.
+model Receipt {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  paymentId         String   @unique @map("payment_id") @db.Uuid
+  number            Int
+  /// Balance right after this payment (snapshot printed on the receipt).
+  balanceAfterCents Int      @map("balance_after_cents")
+  /// Unguessable token for the share link /r/<token>.
+  shareToken        String   @unique @map("share_token")
+  issuedById        String   @map("issued_by_id") @db.Uuid
+  issuedAt          DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
+
+  payment Payment @relation(fields: [schoolId, paymentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, number])
+  @@unique([schoolId, paymentId])
+  @@map("receipts")
+}
+
+/// Per-school receipt counter. Incremented inside the payment's transaction: numbers are
+/// sequential and gap-free (a rolled-back payment gives its number back).
+model ReceiptCounter {
+  schoolId   String @id @map("school_id") @db.Uuid
+  lastNumber Int    @map("last_number")
+
+  @@map("receipt_counters")
+}
+
+/// A reversal of one payment. Append-only.
+model Reversal {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  paymentId     String   @unique @map("payment_id") @db.Uuid
+  reason        String
+  ledgerEntryId String   @map("ledger_entry_id") @db.Uuid
+  reversedById  String   @map("reversed_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  payment Payment @relation(fields: [schoolId, paymentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, paymentId])
+  @@map("reversals")
+}
+
+/// A parent's promise to pay an amount by a date. Kept or broken is computed from payments.
+model Pledge {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  studentId   String    @map("student_id") @db.Uuid
+  amountCents Int       @map("amount_cents")
+  dueDate     DateTime  @map("due_date") @db.Date
+  madeBy      String    @map("made_by")
+  note        String?
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("pledges")
+}
+
+/// In-app notifications for one staff member (e.g. the Director, when a receipt is reversed).
+model Notification {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String    @map("school_id") @db.Uuid
+  membershipId String    @map("membership_id") @db.Uuid
+  title        String
+  body         String
+  link         String?
+  readAt       DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([membershipId, readAt])
+  @@map("notifications")
+}
+
+/// M-Pesa (Daraja) settings of one school. Secrets are encrypted at rest (AES-256-GCM).
+model MpesaSettings {
+  schoolId              String   @id @map("school_id") @db.Uuid
+  shortcode             String
+  /// "paybill" or "till".
+  shortcodeType         String   @map("shortcode_type")
+  /// "simulator", "sandbox" or "production".
+  environment           String
+  consumerKeyEnc        String?  @map("consumer_key_enc")
+  consumerSecretEnc     String?  @map("consumer_secret_enc")
+  passkeyEnc            String?  @map("passkey_enc")
+  initiatorName         String?  @map("initiator_name")
+  securityCredentialEnc String?  @map("security_credential_enc")
+  /// Secret in the callback URLs. Encrypted (to show the URLs) and hashed (to look up the school).
+  callbackTokenEnc      String   @map("callback_token_enc")
+  callbackTokenHash     String   @unique @map("callback_token_hash")
+  updatedById           String   @map("updated_by_id") @db.Uuid
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("mpesa_settings")
+}
+
+/// Every M-Pesa transaction Kiota hears about (C2B confirmations and STK pushes). Not a money
+/// record: a payment is created only after Daraja confirms the transaction.
+model MpesaTransaction {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String    @map("school_id") @db.Uuid
+  /// "c2b" or "stk".
+  kind              String
+  /// M-Pesa transaction ID (receipt number), e.g. SL41H2K3XY.
+  transId           String?   @map("trans_id")
+  checkoutRequestId String?   @unique @map("checkout_request_id")
+  amountCents       Int?      @map("amount_cents")
+  msisdn            String?
+  billRef           String?   @map("bill_ref")
+  payerName         String?   @map("payer_name")
+  transTime         DateTime? @map("trans_time") @db.Timestamptz(3)
+  studentId         String?   @map("student_id") @db.Uuid
+  requestedById     String?   @map("requested_by_id") @db.Uuid
+  /// stk_requested, pending_verification, posted, suspense, assigned, rejected, failed
+  status            String
+  statusDetail      String?   @map("status_detail")
+  paymentId         String?   @map("payment_id") @db.Uuid
+  raw               Json
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([schoolId, transId])
+  @@index([schoolId, status])
+  @@map("mpesa_transactions")
 }

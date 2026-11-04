@@ -4,6 +4,7 @@
  */
 import "dotenv/config";
 import { createClient } from "../src/lib/db-core";
+import { seedFees } from "./seed-fees";
 import { seedStudents } from "./seed-students";
 import { enableAppRoleLogin, syncCatalog } from "./setup";
 
@@ -109,6 +110,7 @@ async function main() {
     }
 
     await seedStudents(owner, schoolIds);
+    await seedFees(owner, schoolIds.get("Bahari Academy")!);
 
     console.log("Seeded Bahari Academy, Milima School, their students and the Arend admin.");
   } finally {

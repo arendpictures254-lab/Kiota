@@ -15,6 +15,18 @@ export async function syncCatalog(owner: PrismaClient) {
     });
   }
 
+  // Permissions retired from the catalogue (no longer referenced by any role or grant).
+  await owner.rolePermission.deleteMany({
+    where: { permissionKey: { notIn: Object.keys(PERMISSIONS) }, schoolId: null },
+  });
+  await owner.permission.deleteMany({
+    where: {
+      key: { notIn: Object.keys(PERMISSIONS) },
+      rolePermissions: { none: {} },
+      grants: { none: {} },
+    },
+  });
+
   for (const role of BUILT_IN_ROLES) {
     const saved = await owner.role.upsert({
       where: { key: role.key },

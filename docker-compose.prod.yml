@@ -11,6 +11,8 @@ x-app-env: &app-env
   # The app connects as kiota_app (no superuser, no BYPASSRLS): row-level security always applies.
   APP_DATABASE_URL: postgresql://kiota_app:${APP_DB_PASSWORD}@db:5432/kiota
   AUTH_SECRET: ${AUTH_SECRET}
+  CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
+  MPESA_CALLBACK_BASE_URL: ${MPESA_CALLBACK_BASE_URL:-}
   SMS_DRIVER: ${SMS_DRIVER}
   ALLOW_CONSOLE_SMS: ${ALLOW_CONSOLE_SMS:-0}
   STORAGE_DRIVER: local
@@ -47,6 +49,7 @@ services:
     environment:
       DATABASE_URL: postgresql://kiota_owner:${POSTGRES_PASSWORD}@db:5432/kiota
       APP_DATABASE_URL: postgresql://kiota_app:${APP_DB_PASSWORD}@db:5432/kiota
+      CREDENTIALS_ENCRYPTION_KEY: ${CREDENTIALS_ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy

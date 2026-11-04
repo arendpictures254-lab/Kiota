@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // A self-contained server for the Docker image (see Dockerfile).
   output: "standalone",
+  // PDF receipts: pdfkit reads its own font metrics from disk, and our brand fonts and logos
+  // are read at run time, so ship them with the server.
+  serverExternalPackages: ["pdfkit"],
+  outputFileTracingIncludes: {
+    "/**": ["./assets/fonts/**", "./public/brand/*.png"],
+  },
   // Storage and SMS code use paths under the working directory, so the file tracer would copy the
   // whole project into the image. Leave out everything the server never reads.
   outputFileTracingExcludes: {

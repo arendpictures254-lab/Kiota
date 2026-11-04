@@ -23,13 +23,17 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "samples": "tsx scripts/make-import-samples.ts",
-    "bench:import": "tsx scripts/bench-import.ts"
+    "bench:import": "tsx scripts/bench-import.ts",
+    "mpesa:simulate": "tsx scripts/mpesa-simulate.ts"
   },
   "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/syne": "^5.3.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "exceljs": "^4.4.0",
     "next": "16.4.5",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -41,6 +45,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.19.2",
+    "@types/pdfkit": "^0.17.7",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",

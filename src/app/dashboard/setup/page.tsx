@@ -9,6 +9,11 @@ import { requireSchool } from "@/lib/auth/context";
 export const metadata: Metadata = { title: "School setup · Kiota" };
 
 const PAGES = [
+  {
+    href: "/dashboard/setup/crest",
+    title: "School crest",
+    text: "Printed on receipts and statements",
+  },
   { href: "/dashboard/setup/levels", title: "Levels", text: "Which levels your school offers" },
   {
     href: "/dashboard/setup/classes",

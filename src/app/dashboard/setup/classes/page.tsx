@@ -25,7 +25,9 @@ async function Classes() {
   const { actor, structure } = await loadSetup();
   const classes = enabledClasses(structure);
   const staff = await withContext(deps.db, ctxOf(actor), (tx) =>
-    tx.membership.findMany({ where: { status: "active" } }),
+    tx.membership.findMany({
+      where: { status: "active", roles: { none: { role: { key: "system_payments" } } } },
+    }),
   );
   const staffOptions = staff
     .map((m) => ({ value: m.id, label: m.displayName }))

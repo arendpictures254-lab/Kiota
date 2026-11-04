@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button, ButtonLink, Card, Loading, Shell } from "@/components/ui";
-import { requireSchool } from "@/lib/auth/context";
-import { listMySchools } from "@/lib/auth/context";
+import { listMySchools, requireSchool } from "@/lib/auth/context";
+import { db } from "@/lib/db";
+import { markNotificationReadAction } from "./fees/actions";
 import { supportAccessAction } from "./actions";
 
 export const metadata: Metadata = { title: "Dashboard · Kiota" };
@@ -23,6 +24,15 @@ async function Dashboard() {
   const schools = await listMySchools(ctx.user.id);
   const can = (k: Parameters<typeof ctx.permissions.has>[0]) => ctx.permissions.has(k);
   const supportOn = ctx.school.supportAccessUntil && ctx.school.supportAccessUntil > new Date();
+  // Row-level security only returns this person's own notifications.
+  const notifications = await db(ctx.dbContext).notification.findMany({
+    where: { readAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+  const fees = can("fees.view") || can("fees.collect") || can("fees.setup") || can("fees.reports");
+  // Bursars and clerks work mostly in Fees: make it their main button.
+  const feesFirst = can("fees.collect") && !can("students.edit");
 
   return (
     <div className="flex flex-col gap-5">
@@ -32,9 +42,39 @@ async function Dashboard() {
         <p className="text-ink/70">{ctx.roles.map((r) => r.name).join(", ")}</p>
       </div>
 
+      {notifications.length ? (
+        <section aria-label="Notifications" className="flex flex-col gap-2">
+          {notifications.map((n) => (
+            <Card key={n.id} className="flex flex-col gap-2 border-status-due/40 bg-status-due/5">
+              <p className="font-semibold text-ink">{n.title}</p>
+              <p className="text-sm text-ink/80">{n.body}</p>
+              <div className="flex items-center gap-4 text-sm">
+                {n.link ? (
+                  <a href={n.link} className="font-semibold text-teal">
+                    Open
+                  </a>
+                ) : null}
+                <form action={markNotificationReadAction}>
+                  <input type="hidden" name="id" value={n.id} />
+                  <button type="submit" className="font-semibold text-ink/60 hover:text-ink">
+                    Mark as read
+                  </button>
+                </form>
+              </div>
+            </Card>
+          ))}
+        </section>
+      ) : null}
+
+      {fees && feesFirst ? <ButtonLink href="/dashboard/fees">Fees</ButtonLink> : null}
       {can("students.view") || can("students.view.own_streams") ? (
-        <ButtonLink href="/dashboard/students">
+        <ButtonLink href="/dashboard/students" variant={feesFirst ? "secondary" : "primary"}>
           {can("students.view") ? "Students" : "My students"}
+        </ButtonLink>
+      ) : null}
+      {fees && !feesFirst ? (
+        <ButtonLink href="/dashboard/fees" variant="secondary">
+          Fees
         </ButtonLink>
       ) : null}
       {can("staff.view") ? (
@@ -47,7 +87,7 @@ async function Dashboard() {
           School setup
         </ButtonLink>
       ) : null}
-      {!can("students.view") && !can("students.view.own_streams") && !can("staff.view") ? (
+      {!can("students.view") && !can("students.view.own_streams") && !can("staff.view") && !fees ? (
         <Card>
           <p className="text-ink/70">Your tools will appear here as Kiota grows.</p>
         </Card>

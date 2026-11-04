@@ -5,8 +5,8 @@ import { ForbiddenError, assertCan, can, canGrant, effectivePermissions } from "
 const role = (key: string) => BUILT_IN_ROLES.find((r) => r.key === key)!.permissions;
 
 describe("built-in roles", () => {
-  it("seeds the nine school roles", () => {
-    expect(BUILT_IN_ROLES.map((r) => r.key)).toEqual([
+  it("seeds the nine school roles people can be given", () => {
+    expect(BUILT_IN_ROLES.filter((r) => !r.hidden).map((r) => r.key)).toEqual([
       "director",
       "principal",
       "bursar",
@@ -36,16 +36,36 @@ describe("built-in roles", () => {
   it("do not let the principal edit money records", () => {
     const p = effectivePermissions({ rolePermissions: role("principal"), grants: [] });
     expect(can(p, "fees.view")).toBe(true);
-    expect(can(p, "payments.record")).toBe(false);
-    expect(can(p, "payments.reverse")).toBe(false);
-    expect(can(p, "fees.manage")).toBe(false);
+    expect(can(p, "fees.collect")).toBe(false);
+    expect(can(p, "fees.reverse")).toBe(false);
+    expect(can(p, "fees.setup")).toBe(false);
+  });
+
+  it("give fee setup to the Director and Bursar, reversals to the Bursar only", () => {
+    const has = (key: string, perm: Parameters<typeof can>[1]) =>
+      can(effectivePermissions({ rolePermissions: role(key), grants: [] }), perm);
+    expect(has("bursar", "fees.setup")).toBe(true);
+    expect(has("director", "fees.setup")).toBe(true);
+    expect(has("accounts_clerk", "fees.setup")).toBe(false);
+    expect(has("bursar", "fees.reverse")).toBe(true);
+    expect(has("accounts_clerk", "fees.reverse")).toBe(false);
+    expect(has("principal", "fees.reverse")).toBe(false);
+    for (const r of ["director", "principal", "bursar"])
+      expect(has(r, "fees.reports"), r).toBe(true);
+    expect(has("accounts_clerk", "fees.reports")).toBe(false);
+  });
+
+  it("keep the automatic payments role hidden and limited to collecting", () => {
+    const sys = BUILT_IN_ROLES.find((r) => r.key === "system_payments")!;
+    expect(sys.hidden).toBe(true);
+    expect([...sys.permissions].sort()).toEqual(["fees.collect", "fees.view", "students.view"]);
   });
 
   it("let the accounts clerk record payments but not reverse them", () => {
     const p = effectivePermissions({ rolePermissions: role("accounts_clerk"), grants: [] });
-    expect(can(p, "payments.record")).toBe(true);
-    expect(can(p, "payments.reverse")).toBe(false);
-    expect(can(p, "fees.manage")).toBe(false);
+    expect(can(p, "fees.collect")).toBe(true);
+    expect(can(p, "fees.reverse")).toBe(false);
+    expect(can(p, "fees.setup")).toBe(false);
   });
 });
 
@@ -55,7 +75,7 @@ describe("effectivePermissions", () => {
       rolePermissions: [...role("bursar"), ...role("class_teacher")],
       grants: ["leaveout.approve"],
     });
-    expect(can(p, "payments.reverse")).toBe(true);
+    expect(can(p, "fees.reverse")).toBe(true);
     expect(can(p, "marks.enter")).toBe(true);
     expect(can(p, "leaveout.approve")).toBe(true);
     expect(can(p, "staff.manage")).toBe(false);
@@ -91,7 +111,7 @@ describe("canGrant", () => {
 
   it("only allows director-grant-only permissions to be granted one by one", () => {
     expect(DIRECTOR_GRANT_ONLY).toEqual(["leaveout.approve"]);
-    expect(canGrant(director, "payments.reverse")).toBe(false);
+    expect(canGrant(director, "fees.reverse")).toBe(false);
     expect(canGrant(director, "staff.manage")).toBe(false);
     expect(canGrant(director, "not.a.permission")).toBe(false);
   });

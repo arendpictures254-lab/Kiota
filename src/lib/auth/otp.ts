@@ -12,7 +12,8 @@ import type { SmsMessage } from "@/lib/sms";
 export const OTP_TTL_MS = 5 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RATE_WINDOW_MS = 15 * 60 * 1000;
-export const OTP_MAX_PER_WINDOW = 3;
+/** Codes per phone per window. Default 3; end-to-end tests raise it (many sign-ins, one phone). */
+export const OTP_MAX_PER_WINDOW = Number(process.env.OTP_MAX_PER_WINDOW ?? 3);
 
 export type OtpDeps = {
   /** App-role client (otp_codes is a platform table). */

@@ -4,7 +4,7 @@
  * transaction. Server actions are thin wrappers around these.
  */
 import { audit } from "@/lib/audit";
-import { DIRECTOR_GRANT_ONLY, type PermissionKey } from "@/lib/auth/catalog";
+import { BUILT_IN_ROLES, DIRECTOR_GRANT_ONLY, type PermissionKey } from "@/lib/auth/catalog";
 import { ForbiddenError, assertCan, canGrant } from "@/lib/auth/permissions";
 import { withContext, type Tx } from "@/lib/db-core";
 import { normalizePhone } from "@/lib/phone";
@@ -13,10 +13,13 @@ import { type Actor, type Deps, ValidationError, ctxOf } from "@/lib/service-kit
 export { type Actor, ValidationError };
 
 export const LEAVEOUT_APPROVE: PermissionKey = "leaveout.approve";
+export const SYSTEM_ROLE = "system_payments";
 
 async function roleIdsFor(tx: Tx, roleKeys: readonly string[]) {
   const unique = [...new Set(roleKeys)];
   if (unique.length === 0) throw new ValidationError("Choose at least one role.", "roles");
+  const hidden = BUILT_IN_ROLES.filter((r) => r.hidden).map((r) => r.key);
+  if (unique.some((k) => hidden.includes(k))) throw new ValidationError("Unknown role.", "roles");
   const roles = await tx.role.findMany({ where: { key: { in: unique }, schoolId: null } });
   if (roles.length !== unique.length) throw new ValidationError("Unknown role.", "roles");
   return roles;
@@ -51,7 +54,8 @@ export async function listStaff({ db }: Deps, actor: Actor): Promise<StaffRow[]>
   assertCan(actor.permissions, "staff.view");
   return withContext(db, ctxOf(actor), async (tx) => {
     const members = await tx.membership.findMany({
-      where: { status: "active" },
+      // Kiota's own automatic-payments member is not staff.
+      where: { status: "active", roles: { none: { role: { key: SYSTEM_ROLE } } } },
       include: {
         // Only the phone: schools never read the platform name (memberships.display_name instead).
         user: { select: { phone: true } },

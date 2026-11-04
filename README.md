@@ -65,6 +65,28 @@ Sign in as Amina Said (0711 000 001), open **Students → Import from Excel**.
 
 The samples are written for the seeded Bahari Academy; rebuild them with `npm run samples`.
 
+## Trying fees
+
+The seed gives Bahari Academy Term 1 2027 fees: fee structures, invoices for every student,
+a mix of M-Pesa / cash / bank payments, one reversal, three M-Pesa payments in suspense, a pledge
+and a few students who owe everything.
+
+- **Bursar** (Peter Otieno, 0711 000 002): **Fees → Record a payment** (e.g. admission
+  `BA/2025/002`, cash) → the receipt opens: switch Thermal / A4, **Print**, **Download PDF**,
+  copy the share link, or **Reverse** it with a reason. **Fees → M-Pesa** shows suspense payments
+  to assign and lets you send an M-Pesa prompt.
+- **Director** (Amina Said, 0711 000 001): a notification about the reversal on the dashboard;
+  **Fees → Reports**: collected vs expected, defaulters (with "send reminder"), daily collection
+  and the Excel export for the auditor.
+- **Simulated M-Pesa** (with `npm run dev` running):
+
+  ```bash
+  npm run mpesa:simulate -- c2b --account BA/2025/005 --amount 2500
+  ```
+
+  The payment appears under Fees → Payments with a receipt. See [docs/mpesa.md](docs/mpesa.md)
+  for every command and for testing against the real Daraja sandbox.
+
 ## Deploying
 
 See [docs/deploy.md](docs/deploy.md) for a single Ubuntu server with Docker, Caddy (automatic

@@ -16,6 +16,8 @@ const dbEnv = {
   DATABASE_URL: testDb(process.env.DATABASE_URL),
   APP_DATABASE_URL: testDb(process.env.APP_DATABASE_URL),
   AUTH_SECRET: "test-secret",
+  CREDENTIALS_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  MPESA_SIM_DIR: ".storage-test/mpesa-sim",
 };
 
 export default defineConfig({
