@@ -47,7 +47,7 @@ test("an Arend admin creates a school and its Director", async ({ page }) => {
   await page.getByLabel("School name").fill(`Pwani Girls ${suffix}`);
   await page.getByLabel("Short name").fill("PWANI");
   await page.getByLabel("County").fill("Mombasa");
-  await page.getByText("Junior school (Grades 7–9)").click();
+  await page.getByText("Junior School (Grade 7–Grade 9)").click();
   await page.getByLabel("Director's full name").fill("Halima Omar");
   await page.getByLabel("Director's phone number").fill(`07${randomInt(10_000_000, 99_999_999)}`);
   await page.getByRole("button", { name: "Create school" }).click();

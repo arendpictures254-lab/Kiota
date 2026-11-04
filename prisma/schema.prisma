@@ -34,8 +34,6 @@ model School {
   /// Short name used as the SMS sender ID (max 11 characters).
   shortName          String       @map("short_name") @db.VarChar(11)
   county             String
-  /// Level keys this school offers, e.g. "primary", "junior", "senior". Configuration, not code.
-  levelsOffered      String[]     @map("levels_offered")
   logoUrl            String?      @map("logo_url")
   status             SchoolStatus @default(pilot)
   /// Arend Studio support may see this school's data until this time. Null = off.
@@ -43,8 +41,13 @@ model School {
   createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  roles       Role[]
+  memberships   Membership[]
+  roles         Role[]
+  levels        Level[]
+  houses        House[]
+  dormitories   Dormitory[]
+  academicYears AcademicYear[]
+  importBatches ImportBatch[]
 
   @@map("schools")
 }
@@ -62,8 +65,9 @@ model User {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  sessions    Session[]
+  memberships   Membership[]
+  sessions      Session[]
+  guardianLinks GuardianLink[]
 
   @@map("users")
 }
@@ -129,10 +133,11 @@ model Membership {
   createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user   User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roles  MembershipRole[]
-  grants PermissionGrant[]
+  school  School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user    User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles   MembershipRole[]
+  grants  PermissionGrant[]
+  streams Stream[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -215,4 +220,386 @@ model AuditLog {
 
   @@index([schoolId, createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// School structure (configuration data, per school)
+// ---------------------------------------------------------------------------
+
+/// Platform catalogue of Kenyan level defaults (grades, subjects, pathways). Copied into a
+/// school's own levels, classes and subjects when the school is created or a level is enabled.
+model LevelTemplate {
+  key          String   @id
+  name         String
+  sortOrder    Int      @map("sort_order")
+  /// Class names in order, e.g. ["Grade 7", "Grade 8", "Grade 9"].
+  grades       String[]
+  subjects     String[]
+  pathways     String[]
+  /// Level that students move into after the last class, e.g. junior to senior. Null = leave school.
+  nextLevelKey String?  @map("next_level_key")
+
+  @@map("level_templates")
+}
+
+model Level {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  key          String
+  name         String
+  sortOrder    Int      @map("sort_order")
+  enabled      Boolean  @default(false)
+  nextLevelKey String?  @map("next_level_key")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classes  Class[]
+  subjects Subject[]
+  pathways Pathway[]
+
+  @@unique([schoolId, key])
+  @@unique([schoolId, id])
+  @@map("levels")
+}
+
+/// A grade or form within a level, e.g. "Grade 7" or "Form 3".
+model Class {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  levelId   String   @map("level_id") @db.Uuid
+  name      String
+  /// Order within the level (1, 2, 3...). Promotion moves students to the next one.
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  level    Level     @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  streams  Stream[]
+  students Student[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("classes")
+}
+
+/// A stream of a class, e.g. "East" in Grade 7 East.
+model Stream {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId                 String   @map("school_id") @db.Uuid
+  classId                  String   @map("class_id") @db.Uuid
+  name                     String
+  classTeacherMembershipId String?  @map("class_teacher_membership_id") @db.Uuid
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  class        Class       @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  classTeacher Membership? @relation(fields: [schoolId, classTeacherMembershipId], references: [schoolId, id], onDelete: Restrict)
+  students     Student[]
+
+  @@unique([classId, name])
+  @@unique([schoolId, id])
+  @@map("streams")
+}
+
+model House {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  students Student[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("houses")
+}
+
+/// Dormitories and their bed capacity. Allocation comes with the boarding module.
+model Dormitory {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  name        String
+  bedCapacity Int      @map("bed_capacity")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, name])
+  @@map("dormitories")
+}
+
+model AcademicYear {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  terms  Term[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("academic_years")
+}
+
+model Term {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  academicYearId String    @map("academic_year_id") @db.Uuid
+  name           String
+  startDate      DateTime  @map("start_date") @db.Date
+  halfTermStart  DateTime? @map("half_term_start") @db.Date
+  halfTermEnd    DateTime? @map("half_term_end") @db.Date
+  endDate        DateTime  @map("end_date") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  academicYear AcademicYear @relation(fields: [schoolId, academicYearId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([academicYearId, name])
+  @@map("terms")
+}
+
+/// Senior school pathways, e.g. STEM.
+model Pathway {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  levelId   String   @map("level_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  level    Level     @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  students Student[]
+
+  @@unique([levelId, name])
+  @@unique([schoolId, id])
+  @@map("pathways")
+}
+
+/// Subjects / learning areas per level.
+model Subject {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  levelId   String   @map("level_id") @db.Uuid
+  name      String
+  code      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  level    Level            @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  students StudentSubject[]
+
+  @@unique([levelId, name])
+  @@unique([schoolId, id])
+  @@map("subjects")
+}
+
+// ---------------------------------------------------------------------------
+// Students and guardians
+// ---------------------------------------------------------------------------
+
+enum Gender {
+  male
+  female
+}
+
+enum StudentStatus {
+  active
+  transferred
+  graduated
+  suspended
+  withdrawn
+}
+
+/// Students are archived (status), never deleted: the app role has no DELETE on this table.
+model Student {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String        @map("school_id") @db.Uuid
+  admissionNumber String        @map("admission_number")
+  /// NEMIS Unique Personal Identifier.
+  upi             String?
+  firstName       String        @map("first_name")
+  middleName      String?       @map("middle_name")
+  lastName        String        @map("last_name")
+  gender          Gender
+  dateOfBirth     DateTime      @map("date_of_birth") @db.Date
+  photoKey        String?       @map("photo_key")
+  classId         String        @map("class_id") @db.Uuid
+  streamId        String?       @map("stream_id") @db.Uuid
+  boarder         Boolean       @default(false)
+  houseId         String?       @map("house_id") @db.Uuid
+  pathwayId       String?       @map("pathway_id") @db.Uuid
+  specialNeeds    String?       @map("special_needs")
+  status          StudentStatus @default(active)
+  statusDate      DateTime      @default(now()) @map("status_date") @db.Date
+  statusReason    String?       @map("status_reason")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  class          Class                 @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  stream         Stream?               @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+  house          House?                @relation(fields: [schoolId, houseId], references: [schoolId, id], onDelete: Restrict)
+  pathway        Pathway?              @relation(fields: [schoolId, pathwayId], references: [schoolId, id], onDelete: Restrict)
+  medical        StudentMedical?
+  statusChanges  StudentStatusChange[]
+  guardians      GuardianLink[]
+  subjects       StudentSubject[]
+  documents      StudentDocument[]
+  openingBalance OpeningBalance?
+
+  @@unique([schoolId, admissionNumber])
+  @@unique([schoolId, id])
+  @@index([schoolId, classId, streamId])
+  @@map("students")
+}
+
+/// Medical notes and allergies. Row-level security: only with "students.medical.view".
+model StudentMedical {
+  studentId    String   @id @map("student_id") @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  medicalNotes String?  @map("medical_notes")
+  allergies    String?
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, studentId])
+  @@map("student_medical")
+}
+
+/// Append-only history of status changes.
+model StudentStatusChange {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String         @map("school_id") @db.Uuid
+  studentId  String         @map("student_id") @db.Uuid
+  fromStatus StudentStatus? @map("from_status")
+  toStatus   StudentStatus  @map("to_status")
+  date       DateTime       @db.Date
+  reason     String?
+  changedBy  String         @map("changed_by") @db.Uuid
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@map("student_status_changes")
+}
+
+/// Senior school: the subjects a student takes.
+model StudentSubject {
+  schoolId  String @map("school_id") @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+  subjectId String @map("subject_id") @db.Uuid
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Cascade)
+  subject Subject @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+
+  @@id([studentId, subjectId])
+  @@map("student_subjects")
+}
+
+model StudentDocument {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  kind         String
+  fileKey      String   @map("file_key")
+  fileName     String   @map("file_name")
+  contentType  String   @map("content_type")
+  uploadedById String   @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@map("student_documents")
+}
+
+enum GuardianRelationship {
+  mother
+  father
+  guardian
+  sponsor
+  other
+}
+
+enum Language {
+  en
+  sw
+}
+
+/// Links a platform-level user (the parent) to one student at one school. The only way a parent
+/// reaches school data. `name` is the school's own name for the guardian, so a school never sees
+/// what another school typed.
+model GuardianLink {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId            String               @map("school_id") @db.Uuid
+  studentId           String               @map("student_id") @db.Uuid
+  userId              String               @map("user_id") @db.Uuid
+  name                String
+  relationship        GuardianRelationship
+  language            Language             @default(en)
+  receivesFees        Boolean              @default(true) @map("receives_fees")
+  receivesAcademics   Boolean              @default(true) @map("receives_academics")
+  receivesBoarding    Boolean              @default(true) @map("receives_boarding")
+  authorisedToCollect Boolean              @default(false) @map("authorised_to_collect")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student      Student                 @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  confirmation ParentLinkConfirmation?
+
+  @@unique([studentId, userId])
+  @@index([userId])
+  @@map("guardian_links")
+}
+
+/// Platform level, never visible to schools: a link the parent must confirm by SMS code because
+/// they already have confirmed links at another school. No row = confirmed.
+model ParentLinkConfirmation {
+  guardianLinkId String    @id @map("guardian_link_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  status         String    @default("pending")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  confirmedAt    DateTime? @map("confirmed_at") @db.Timestamptz(3)
+
+  link GuardianLink @relation(fields: [guardianLinkId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("parent_link_confirmations")
+}
+
+/// Opening fee balances from the import, staged for the fees module. Not a money record yet:
+/// the fees module posts each one as the student's first ledger entry and sets posted = true.
+model OpeningBalance {
+  studentId   String   @id @map("student_id") @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  /// Integer cents. Positive = the student owes; negative = credit.
+  amountCents Int      @map("amount_cents")
+  posted      Boolean  @default(false)
+  source      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, studentId])
+  @@map("opening_balances")
+}
+
+/// An uploaded import file between preview and confirm. Holds the parsed rows, not student data.
+model ImportBatch {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  fileName    String    @map("file_name")
+  fileHash    String    @map("file_hash")
+  payload     Json
+  status      String    @default("previewed")
+  summary     Json?
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  importedAt  DateTime? @map("imported_at") @db.Timestamptz(3)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@map("import_batches")
 }

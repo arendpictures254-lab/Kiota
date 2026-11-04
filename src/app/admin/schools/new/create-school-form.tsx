@@ -4,16 +4,8 @@ import { useActionState } from "react";
 import { Button, Checkbox, Field, Notice } from "@/components/ui";
 import { createSchoolAction, type CreateSchoolState } from "../../actions";
 
-// Level keys for now. These become a configuration table with the school structure module.
-const LEVELS = [
-  { key: "pre_primary", label: "Pre-primary" },
-  { key: "primary", label: "Primary (Grades 1–6)" },
-  { key: "junior", label: "Junior school (Grades 7–9)" },
-  { key: "senior", label: "Senior school (Grades 10–12)" },
-  { key: "legacy_844", label: "8-4-4 (Forms 3–4)" },
-];
-
-export function CreateSchoolForm() {
+/** Levels come from the platform's level templates (configuration), passed in by the page. */
+export function CreateSchoolForm({ levels }: { levels: { key: string; label: string }[] }) {
   const [state, action, pending] = useActionState<CreateSchoolState, FormData>(
     createSchoolAction,
     {},
@@ -38,7 +30,7 @@ export function CreateSchoolForm() {
       <Field label="County" name="county" required error={err("county")} />
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-semibold text-ink">Levels offered</legend>
-        {LEVELS.map((l) => (
+        {levels.map((l) => (
           <Checkbox key={l.key} name="levels" value={l.key} label={l.label} />
         ))}
       </fieldset>

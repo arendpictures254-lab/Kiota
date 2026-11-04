@@ -65,6 +65,54 @@ export function Field({
   );
 }
 
+const control =
+  "rounded-xl border border-ink/20 bg-white px-4 text-base text-ink outline-none focus:border-teal focus:ring-2 focus:ring-teal/30";
+
+export function Select({
+  label,
+  options,
+  placeholder,
+  ...select
+}: ComponentProps<"select"> & {
+  label: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const id = select.id ?? select.name;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
+        {label}
+      </label>
+      <select id={id} className={`h-12 ${control}`} {...select}>
+        {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export function TextArea({
+  label,
+  hint,
+  ...area
+}: ComponentProps<"textarea"> & { label: string; hint?: string }) {
+  const id = area.id ?? area.name;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold text-ink">
+        {label}
+      </label>
+      <textarea id={id} rows={3} className={`py-3 ${control}`} {...area} />
+      {hint ? <p className="text-sm text-ink/60">{hint}</p> : null}
+    </div>
+  );
+}
+
 export function Checkbox({
   label,
   description,

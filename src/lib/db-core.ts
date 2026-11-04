@@ -59,9 +59,13 @@ export async function withContext<T>(
   base: PrismaClient,
   ctx: DbContext,
   fn: (tx: Tx) => Promise<T>,
+  options?: { timeoutMs?: number },
 ): Promise<T> {
-  return base.$transaction(async (tx) => {
-    await tx.$queryRaw(setContextSql(ctx));
-    return fn(tx);
-  });
+  return base.$transaction(
+    async (tx) => {
+      await tx.$queryRaw(setContextSql(ctx));
+      return fn(tx);
+    },
+    { timeout: options?.timeoutMs ?? 10_000, maxWait: 10_000 },
+  );
 }

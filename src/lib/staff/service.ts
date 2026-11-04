@@ -3,37 +3,16 @@
  * runs in the school's row-level-security context, and writes the audit log in the same
  * transaction. Server actions are thin wrappers around these.
  */
-import type { PrismaClient } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
 import { DIRECTOR_GRANT_ONLY, type PermissionKey } from "@/lib/auth/catalog";
 import { ForbiddenError, assertCan, canGrant } from "@/lib/auth/permissions";
 import { withContext, type Tx } from "@/lib/db-core";
 import { normalizePhone } from "@/lib/phone";
+import { type Actor, type Deps, ValidationError, ctxOf } from "@/lib/service-kit";
 
-export type Actor = {
-  userId: string;
-  schoolId: string;
-  permissions: ReadonlySet<PermissionKey>;
-  ip?: string | null;
-};
-
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly field?: string,
-  ) {
-    super(message);
-    this.name = "ValidationError";
-  }
-}
+export { type Actor, ValidationError };
 
 export const LEAVEOUT_APPROVE: PermissionKey = "leaveout.approve";
-
-type Deps = { db: PrismaClient };
-
-function ctxOf(actor: Actor) {
-  return { userId: actor.userId, schoolId: actor.schoolId };
-}
 
 async function roleIdsFor(tx: Tx, roleKeys: readonly string[]) {
   const unique = [...new Set(roleKeys)];

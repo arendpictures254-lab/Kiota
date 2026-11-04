@@ -4,6 +4,7 @@
  */
 import "dotenv/config";
 import { createClient } from "../src/lib/db-core";
+import { seedStudents } from "./seed-students";
 import { enableAppRoleLogin, syncCatalog } from "./setup";
 
 export const SEED = {
@@ -86,13 +87,10 @@ async function main() {
       const school =
         existing ??
         (await owner.school.create({
-          data: {
-            name: s.name,
-            shortName: s.shortName,
-            county: s.county,
-            levelsOffered: [...s.levelsOffered],
-          },
+          data: { name: s.name, shortName: s.shortName, county: s.county },
         }));
+      // Kenyan level defaults; switches on the levels this school offers.
+      await owner.$executeRaw`SELECT kiota_copy_level_templates(${school.id}::uuid, ${[...s.levelsOffered]}::text[])`;
       schoolIds.set(s.name, school.id);
       for (const person of s.staff) {
         const user = await ensureUser(person.phone, person.name);
@@ -105,7 +103,9 @@ async function main() {
       await ensureMember(schoolIds.get(m.school)!, shared.id, m.roles);
     }
 
-    console.log("Seeded Bahari Academy, Milima School and the Arend admin.");
+    await seedStudents(owner, schoolIds);
+
+    console.log("Seeded Bahari Academy, Milima School, their students and the Arend admin.");
   } finally {
     await owner.$disconnect();
   }

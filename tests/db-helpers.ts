@@ -12,9 +12,41 @@ export function randomPhone(): string {
   return `+2547${randomInt(10_000_000, 99_999_999)}`;
 }
 
-export async function makeSchool(name: string) {
-  return owner.school.create({
-    data: { name, shortName: name.slice(0, 11), county: "Kilifi", levelsOffered: ["primary"] },
+/** A school with the Kenyan level templates copied in; `levels` are switched on. */
+export async function makeSchool(name: string, levels: string[] = ["primary", "junior"]) {
+  const school = await owner.school.create({
+    data: { name, shortName: name.slice(0, 11), county: "Kilifi" },
+  });
+  await owner.$executeRaw`SELECT kiota_copy_level_templates(${school.id}::uuid, ${levels}::text[])`;
+  return school;
+}
+
+/** Create a stream in `className` (e.g. "Grade 7") at a school. */
+export async function makeStream(schoolId: string, className: string, name: string) {
+  const cls = await owner.class.findUniqueOrThrow({
+    where: { schoolId_name: { schoolId, name: className } },
+  });
+  return owner.stream.create({ data: { schoolId, classId: cls.id, name } });
+}
+
+let admissionSeq = 0;
+export async function makeStudent(
+  schoolId: string,
+  streamId: string,
+  data: Partial<{ firstName: string; lastName: string; admissionNumber: string }> = {},
+) {
+  const stream = await owner.stream.findUniqueOrThrow({ where: { id: streamId } });
+  return owner.student.create({
+    data: {
+      schoolId,
+      admissionNumber: data.admissionNumber ?? `T${Date.now()}${admissionSeq++}`,
+      firstName: data.firstName ?? "Test",
+      lastName: data.lastName ?? "Student",
+      gender: "female",
+      dateOfBirth: new Date("2013-05-01"),
+      classId: stream.classId,
+      streamId,
+    },
   });
 }
 

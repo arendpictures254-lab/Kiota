@@ -36,3 +36,25 @@ You can type them as `0711 000 001` or `+254711000001`.
 | 0733 000 001 | Faith Njeri   | Both schools   | Subject teacher (sees the school picker) |
 
 Each number can request 3 codes per 15 minutes.
+
+Grace Wanjiru is class teacher of Grade 7 East, so she sees only those 15 students.
+
+**Seeded students.** Bahari Academy has 61 students in Grade 7 and Grade 8 (East and West
+streams), each with one or two guardians, plus houses, dormitories and the 2027 terms.
+Wanjiku Kamau (0744 000 001) is a parent with Brian at Bahari Academy and Joy at Milima School;
+her Milima link is waiting for her to confirm in the parent portal (a later phase). She cannot
+sign in yet: parents get the portal later.
+
+## Trying the import
+
+Sign in as Amina Said (0711 000 001), open **Students → Import from Excel**.
+
+1. **Download template** gives an .xlsx with a README sheet and dropdowns for your classes.
+2. Upload [docs/samples/kiota-import-sample-with-errors.xlsx](docs/samples/kiota-import-sample-with-errors.xlsx)
+   to see how problems are explained (bad phone, unknown stream, duplicate admission number,
+   impossible date of birth, unknown relationship).
+3. Upload [docs/samples/kiota-import-sample.xlsx](docs/samples/kiota-import-sample.xlsx): no
+   errors, two warnings (a new house, a student with no guardian). Press **Import**.
+4. Search for "Rehema" in Students. Uploading the same file again updates, never duplicates.
+
+The samples are written for the seeded Bahari Academy; rebuild them with `npm run samples`.

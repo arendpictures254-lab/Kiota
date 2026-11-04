@@ -7,3 +7,4 @@ test-results
 docs/spec.md
 .dev
 .pgdata
+.storage

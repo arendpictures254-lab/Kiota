@@ -32,13 +32,26 @@ async function Dashboard() {
         <p className="text-ink/70">{ctx.roles.map((r) => r.name).join(", ")}</p>
       </div>
 
+      {can("students.view") || can("students.view.own_streams") ? (
+        <ButtonLink href="/dashboard/students">
+          {can("students.view") ? "Students" : "My students"}
+        </ButtonLink>
+      ) : null}
       {can("staff.view") ? (
-        <ButtonLink href="/dashboard/staff">Staff</ButtonLink>
-      ) : (
+        <ButtonLink href="/dashboard/staff" variant="secondary">
+          Staff
+        </ButtonLink>
+      ) : null}
+      {can("structure.manage") ? (
+        <ButtonLink href="/dashboard/setup" variant="secondary">
+          School setup
+        </ButtonLink>
+      ) : null}
+      {!can("students.view") && !can("students.view.own_streams") && !can("staff.view") ? (
         <Card>
           <p className="text-ink/70">Your tools will appear here as Kiota grows.</p>
         </Card>
-      )}
+      ) : null}
 
       {can("school.settings.manage") ? (
         <Card className="flex flex-col gap-3">

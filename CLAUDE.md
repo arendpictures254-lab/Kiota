@@ -57,12 +57,21 @@ src/lib/db.ts                 App database access (kiota_app role): db(ctx), inC
 src/lib/db-core.ts            Client factory and the school-context Prisma extension
 src/lib/auth/                 Permission catalogue, permission checks, OTP, sessions, context
 src/lib/staff/service.ts      Staff and school admin logic (permission-checked, audited)
+src/lib/structure/service.ts  Levels, classes, streams, houses, dormitories, terms, subjects
+src/lib/students/             Students and guardians (service.ts), pure rules (rules.ts), promotion
+src/lib/import/               Excel import: columns, template/reader, validate (pure), run
+src/lib/storage/              File storage interface (local disk driver; S3 later)
+src/lib/service-kit.ts        Actor, ValidationError and parsing helpers shared by services
+src/lib/actions.ts            Helpers for server actions (FormState, attempt, currentActor)
 src/lib/sms/                  sendSms() interface and drivers (console for development)
 src/lib/audit.ts              audit(tx, entry): append to the audit log in the same transaction
 src/generated/prisma/         Generated Prisma client (gitignored, `npm run db:generate`)
 tests/                        Database test setup and helpers
 e2e/                          Playwright end-to-end tests
 scripts/dev-db.ts             Local PostgreSQL without Docker (`npm run db:local`)
+scripts/make-import-samples.ts  Writes docs/samples/*.xlsx (`npm run samples`)
+docs/launch-checklist.md      Everything that must happen before launch. Add to it.
+docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
 ```
 
@@ -88,6 +97,18 @@ Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL ar
   writes the audit log in the same transaction. Check permissions, never role names.
 - Permissions and built-in roles live in `src/lib/auth/catalog.ts` and are synced to the
   database by the seed. `leaveout.approve` is director-grant-only (granted person by person).
+- Some policies also check permissions in the database (`app_has_permission`): students are
+  visible with `students.view`, or `students.view.own_streams` for the streams a class teacher
+  teaches; `student_medical` needs `students.medical.view`. Tables about one student
+  (guardian links, documents, status history, opening balances) follow the student's visibility.
+- Students are archived (status + history), never deleted: no DELETE grant and a trigger.
+- Guardians are platform users found by phone (`app_upsert_guardian_link`). A school stores its
+  own name for the guardian on the link and must never learn about the parent's other schools;
+  pending cross-school confirmations live in `parent_link_confirmations`, readable only by the parent.
+- Structure (levels, classes, subjects, pathways) is configuration: Kenyan defaults live in the
+  `level_templates` table and are copied per school. Never hard-code level or class names.
+- Opening balances from the import are staged (`opening_balances`, posted = false). Only the
+  fees module may post them; a posted row can never change.
 - The database client pins `TimeZone=UTC`; keep it (the pg adapter sends timestamps without an offset).
 
 ## Brand
@@ -139,6 +160,7 @@ npm run dev            # app at http://localhost:3000; sign-in codes print in th
 npm run db:migrate     # create/apply a migration after editing prisma/schema.prisma
 npm run db:generate    # regenerate the Prisma client (Prisma 7 does not do it on migrate)
 npm run db:studio      # browse the database
+npm run samples        # rebuild docs/samples/*.xlsx after changing import columns
 ```
 
 Checks (run before every commit; Postgres must be running):
