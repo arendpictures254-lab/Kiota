@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { ButtonLink } from "@/components/ui";
 
 export default function Home() {
   return (
@@ -9,6 +10,9 @@ export default function Home() {
       </h1>
       <p className="mt-3 text-lg text-ink sm:text-xl">Every child, one place.</p>
       <div className="mt-8 h-1 w-16 rounded-full bg-light-twig" aria-hidden="true" />
+      <div className="mt-10 w-full max-w-xs">
+        <ButtonLink href="/sign-in">Sign in</ButtonLink>
+      </div>
     </main>
   );
 }

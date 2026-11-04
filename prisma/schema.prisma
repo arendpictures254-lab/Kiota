@@ -1,7 +1,11 @@
 // Kiota database schema.
-// Rules (see CLAUDE.md): every school-data table has school_id with row-level security,
-// money is integer cents, payments/receipts/reversals are append-only.
-// No models yet: each module adds its data model, with tests, before any screens.
+//
+// Rules (see CLAUDE.md):
+// - Every table holding school data has school_id, and PostgreSQL row-level security
+//   (FORCE ROW LEVEL SECURITY) walls each school off. Policies live in the SQL migrations.
+// - The app connects as the non-owner role `kiota_app`; migrations run as the owner.
+// - Money is integer cents. Payments, receipts, reversals and the audit log are append-only.
+// - Table and column names are snake_case.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +14,205 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Platform level (not owned by one school)
+// ---------------------------------------------------------------------------
+
+enum SchoolStatus {
+  pilot
+  active
+  suspended
+}
+
+/// A school on the platform. Row-level security: visible in its own school context,
+/// and its name is listed to its members (school picker) and to Arend admins.
+model School {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  /// Short name used as the SMS sender ID (max 11 characters).
+  shortName          String       @map("short_name") @db.VarChar(11)
+  county             String
+  /// Level keys this school offers, e.g. "primary", "junior", "senior". Configuration, not code.
+  levelsOffered      String[]     @map("levels_offered")
+  logoUrl            String?      @map("logo_url")
+  status             SchoolStatus @default(pilot)
+  /// Arend Studio support may see this school's data until this time. Null = off.
+  supportAccessUntil DateTime?    @map("support_access_until") @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  roles       Role[]
+
+  @@map("schools")
+}
+
+/// One platform-level identity per person, keyed on a verified phone number (E.164).
+/// Row-level security: a user sees themselves and members of the current school.
+model User {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// E.164, e.g. +254712345678
+  phone           String   @unique
+  email           String?
+  name            String
+  /// Arend Studio admin. Platform-level only: grants no access to any school's data.
+  isPlatformAdmin Boolean  @default(false) @map("is_platform_admin")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+/// One-time sign-in codes. Only a hash of the code is stored.
+model OtpCode {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone      String
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([phone, createdAt])
+  @@map("otp_codes")
+}
+
+/// Signed-in sessions. The cookie holds a random token; only its hash is stored.
+model Session {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id") @db.Uuid
+  /// The school the user chose to open. Null until chosen.
+  schoolId  String?  @map("school_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Permission catalogue (platform-wide). Keys like "staff.manage", "leaveout.approve".
+model Permission {
+  key               String  @id
+  description       String
+  /// Only a Director may grant this to a person, one by one. Never part of a custom role.
+  directorGrantOnly Boolean @default(false) @map("director_grant_only")
+
+  rolePermissions RolePermission[]
+  grants          PermissionGrant[]
+
+  @@map("permissions")
+}
+
+// ---------------------------------------------------------------------------
+// School owned (school_id + row-level security)
+// ---------------------------------------------------------------------------
+
+enum MembershipStatus {
+  active
+  removed
+}
+
+/// Links a user to a school. A user may belong to several schools.
+model Membership {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String           @map("school_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  status    MembershipStatus @default(active)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user   User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles  MembershipRole[]
+  grants PermissionGrant[]
+
+  @@unique([schoolId, userId])
+  @@unique([schoolId, id])
+  @@map("memberships")
+}
+
+/// Roles. Built-in roles have school_id NULL and a fixed key; custom roles belong to one school.
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String?  @map("school_id") @db.Uuid
+  /// Stable key for built-in roles ("director", "bursar"...). Null for custom roles.
+  key         String?  @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  school      School?          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  memberships MembershipRole[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId        String  @map("role_id") @db.Uuid
+  permissionKey String  @map("permission_key")
+  /// Same as the role's school_id (NULL for built-in roles); kept here for row-level security.
+  schoolId      String? @map("school_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permissions")
+}
+
+model MembershipRole {
+  schoolId     String   @map("school_id") @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  membership Membership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([membershipId, roleId])
+  @@map("membership_roles")
+}
+
+/// A permission given directly to one person, e.g. "leaveout.approve" granted by the Director.
+/// Withdrawing deletes the row; the audit log keeps the history.
+model PermissionGrant {
+  schoolId      String   @map("school_id") @db.Uuid
+  membershipId  String   @map("membership_id") @db.Uuid
+  permissionKey String   @map("permission_key")
+  grantedById   String   @map("granted_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  membership Membership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key])
+
+  @@id([membershipId, permissionKey])
+  @@map("permission_grants")
+}
+
+/// Append-only record of every sensitive action. Never updated or deleted
+/// (enforced by grants and a trigger).
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Null for platform actions (e.g. sign-in).
+  schoolId   String?  @map("school_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([schoolId, createdAt])
+  @@map("audit_logs")
 }

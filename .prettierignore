@@ -5,3 +5,5 @@ src/generated
 playwright-report
 test-results
 docs/spec.md
+.dev
+.pgdata

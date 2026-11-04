@@ -36,26 +36,59 @@ including a test proving school A can never read school B's data.
 
 - **App:** Next.js 16 (App Router, Server Components), React 19, TypeScript in strict mode
 - **Styling:** Tailwind CSS v4, brand tokens defined in `src/app/globals.css` (`@theme`)
-- **Database:** PostgreSQL 17 (Docker Compose locally), Prisma 7 ORM with the `pg` driver adapter
+- **Database:** PostgreSQL 17 (Docker Compose or embedded-postgres locally), Prisma 7 with the `pg` driver adapter, row-level security per school
+- **Sign-in:** phone number + 6-digit SMS code; session cookie (random token, hash stored)
 - **Tests:** Vitest (unit, jsdom) and Playwright (end-to-end, mobile and desktop Chrome)
 - **Quality:** ESLint (next config) and Prettier (with Tailwind class sorting)
 
 ## Folder layout
 
 ```
-docs/spec.md            Product specification (source of truth for features)
-prisma/schema.prisma    Database schema (models added module by module)
-prisma.config.ts        Prisma CLI config (reads DATABASE_URL from .env)
-src/app/                Routes, layouts, pages (App Router)
-src/app/globals.css     Tailwind import and Kiota design tokens
-src/lib/                Server and shared code (db client, money helpers...)
-src/generated/prisma/   Generated Prisma client (gitignored, created by `prisma generate`)
-public/brand/           Kiota logo files
-e2e/                    Playwright end-to-end tests
-docker-compose.yml      Local PostgreSQL
+docs/spec.md                  Product specification (source of truth for features)
+prisma/schema.prisma          Database schema
+prisma/migrations/            SQL migrations, incl. row-level security (`*_school_walls`)
+prisma/seed.ts                Development seed (two schools, test phone numbers in README)
+prisma/setup.ts               Owner-only helpers: permission catalogue sync, app role login
+prisma.config.ts              Prisma CLI config (owner connection: DATABASE_URL)
+src/app/                      Routes (sign-in, schools picker, dashboard, staff, admin)
+src/app/globals.css           Tailwind import and Kiota design tokens
+src/components/               Shared UI (ui.tsx: Button, Field, Card, Shell...)
+src/lib/db.ts                 App database access (kiota_app role): db(ctx), inContext(ctx, fn)
+src/lib/db-core.ts            Client factory and the school-context Prisma extension
+src/lib/auth/                 Permission catalogue, permission checks, OTP, sessions, context
+src/lib/staff/service.ts      Staff and school admin logic (permission-checked, audited)
+src/lib/sms/                  sendSms() interface and drivers (console for development)
+src/lib/audit.ts              audit(tx, entry): append to the audit log in the same transaction
+src/generated/prisma/         Generated Prisma client (gitignored, `npm run db:generate`)
+tests/                        Database test setup and helpers
+e2e/                          Playwright end-to-end tests
+scripts/dev-db.ts             Local PostgreSQL without Docker (`npm run db:local`)
+docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
 ```
 
-Unit tests sit next to the code they test as `*.test.ts(x)`.
+Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL are `*.db.test.ts`.
+
+## School walls: how to write data code
+
+- The app connects as `kiota_app` (APP_DATABASE_URL): not the owner, not a superuser, no
+  BYPASSRLS. Migrations and the seed use the owner (DATABASE_URL). Never use the owner in app code.
+- Every school-owned table gets `school_id`, `ENABLE` + `FORCE ROW LEVEL SECURITY` and a policy
+  `school_id = (SELECT app_current_school())`, written by hand in a migration, plus GRANTs to
+  `kiota_app`. The test "every table with a school_id column has row-level security" fails
+  otherwise.
+- Queries run with a context: `db({ userId, schoolId })` for reads, `inContext(ctx, tx => ...)` for
+  writes. Both set `app.user_id` / `app.school_id` with `set_config(..., true)` in a transaction.
+  `app_current_school()` only accepts the school if the user is an active member (or an Arend admin
+  while the school's support access is on), so a wrong school id sees nothing.
+- Platform tables without RLS: `otp_codes`, `sessions`, `permissions` (no school data).
+- Privileged steps (sign-in lookup, school picker, creating schools, finding a user by phone)
+  go through narrow `SECURITY DEFINER` SQL functions (`app_*`) in the migrations.
+- Server actions: load the context with `requireSchool()` / `requirePermission()` from
+  `src/lib/auth/context.ts`, then call a service function that checks permissions again and
+  writes the audit log in the same transaction. Check permissions, never role names.
+- Permissions and built-in roles live in `src/lib/auth/catalog.ts` and are synced to the
+  database by the seed. `leaveout.approve` is director-grant-only (granted person by person).
+- The database client pins `TimeZone=UTC`; keep it (the pg adapter sends timestamps without an offset).
 
 ## Brand
 
@@ -76,11 +109,15 @@ Use the Tailwind tokens, never raw hex values in components.
 Fonts: Syne for headings (`font-heading`, applied to h1–h4 by default), DM Sans for body
 (`font-sans`), both loaded with `next/font` in `src/app/layout.tsx`.
 
+Next.js 16 has `cacheComponents` on: anything that reads cookies or the database goes in an async
+component inside `<Suspense>` (see the existing pages).
+
 ## Naming conventions
 
 - Files and folders: `kebab-case`. React components: `PascalCase`. Functions and variables: `camelCase`.
 - Database tables and columns: `snake_case` (map with `@@map` / `@map` in Prisma), e.g. `school_id`.
 - Money fields end in `_cents` (e.g. `amount_cents`) and are integers.
+- Audit actions: `area.verb`, e.g. `staff.invite`, `permission.grant`, `school.create`.
 
 ## Running things
 
@@ -89,27 +126,29 @@ First time:
 ```bash
 npm install
 cp .env.example .env
-npm run db:up          # start Postgres in Docker
+npm run db:up          # Postgres in Docker, or `npm run db:local` without Docker (keep it running)
+npm run db:migrate     # apply migrations (as the owner)
+npm run db:seed        # catalogue, app role login, two test schools
 npx playwright install chromium
 ```
 
 Day to day:
 
 ```bash
-npm run dev            # app at http://localhost:3000
+npm run dev            # app at http://localhost:3000; sign-in codes print in this terminal
 npm run db:migrate     # create/apply a migration after editing prisma/schema.prisma
+npm run db:generate    # regenerate the Prisma client (Prisma 7 does not do it on migrate)
 npm run db:studio      # browse the database
-npm run db:down        # stop Postgres
 ```
 
-Checks (run before every commit):
+Checks (run before every commit; Postgres must be running):
 
 ```bash
 npm run lint
 npm run typecheck
 npm run format:check   # or npm run format to fix
-npm test               # Vitest unit tests
-npm run test:e2e       # Playwright (starts the dev server itself)
+npm test               # Vitest: unit + database tests (database `kiota_test`)
+npm run test:e2e       # Playwright: builds the app, runs it on :3101 against `kiota_e2e`
 npm run build
 ```
 
@@ -117,4 +156,5 @@ npm run build
 
 - Build one module at a time in the spec's roadmap order. Each module starts with its data model
   and tests before any screens.
+- Tests are required for money, permissions and school walls.
 - Never commit `.env` or real school data.
