@@ -19,6 +19,8 @@ export const E2E_ENV = {
   APP_DATABASE_URL: e2eDb(process.env.APP_DATABASE_URL),
   AUTH_SECRET: "e2e-secret",
   SMS_DRIVER: "console",
+  SITE_URL: `http://localhost:${PORT}`,
+  APP_URL: `http://app.localhost:${PORT}`,
   ALLOW_CONSOLE_SMS: "1",
 };
 
@@ -30,7 +32,8 @@ export default defineConfig({
   reporter: "list",
   globalSetup: "./e2e/global-setup.ts",
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    // The app address; site tests use SITE (see e2e/site.spec.ts).
+    baseURL: `http://app.localhost:${PORT}`,
     trace: "on-first-retry",
   },
   projects: [

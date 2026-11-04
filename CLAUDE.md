@@ -50,7 +50,11 @@ prisma/migrations/            SQL migrations, incl. row-level security (`*_schoo
 prisma/seed.ts                Development seed (two schools, test phone numbers in README)
 prisma/setup.ts               Owner-only helpers: permission catalogue sync, app role login
 prisma.config.ts              Prisma CLI config (owner connection: DATABASE_URL)
-src/app/                      Routes (sign-in, schools picker, dashboard, staff, admin)
+src/app/                      App routes (sign-in, schools picker, dashboard, staff, admin)
+src/app/site/                 Public site pages (kiota.app); never reached directly, see src/proxy.ts
+src/proxy.ts                  Host routing: kiota.app = site, app.kiota.app = app (Next 16 "proxy")
+src/lib/hosts.ts              SITE_URL / APP_URL and which paths belong to which address
+src/lib/demo/service.ts       "Book a demo" requests (platform level, admin-only reading)
 src/app/globals.css           Tailwind import and Kiota design tokens
 src/components/               Shared UI (ui.tsx: Button, Field, Card, Shell...)
 src/lib/db.ts                 App database access (kiota_app role): db(ctx), inContext(ctx, fn)
@@ -70,6 +74,10 @@ tests/                        Database test setup and helpers
 e2e/                          Playwright end-to-end tests
 scripts/dev-db.ts             Local PostgreSQL without Docker (`npm run db:local`)
 scripts/make-import-samples.ts  Writes docs/samples/*.xlsx (`npm run samples`)
+scripts/bench-import.ts       1,000-student import benchmark (`npm run bench:import`)
+scripts/deploy-setup.ts       Runs on each deploy as owner: catalogue sync, kiota_app password
+scripts/create-admin.ts       Creates an Arend admin (docs/deploy.md)
+Dockerfile, docker-compose.prod.yml, deploy/   Single-server production setup (docs/deploy.md)
 docs/launch-checklist.md      Everything that must happen before launch. Add to it.
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
@@ -102,6 +110,14 @@ Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL ar
   teaches; `student_medical` needs `students.medical.view`. Tables about one student
   (guardian links, documents, status history, opening balances) follow the student's visibility.
 - Students are archived (status + history), never deleted: no DELETE grant and a trigger.
+- **Names never cross schools.** The app role cannot read `users.name` or `users.email`
+  (column privileges). Staff names come from `memberships.display_name`, guardian names from
+  `guardian_links.name`; a user's own record comes from `app_me()` (`getMe()`). Always
+  `select` explicit columns from `users` (only id, phone, is_platform_admin, created_at).
+- Policy helper functions are PL/pgSQL (plans are cached). Keep new ones PL/pgSQL; a SQL
+  `SECURITY DEFINER` function is re-planned on every call and made student queries 6x slower.
+- Bulk work (imports) uses set-based SQL (createMany, `jsonb_to_recordset`, in-database loops),
+  not one round trip per row.
 - Guardians are platform users found by phone (`app_upsert_guardian_link`). A school stores its
   own name for the guardian on the link and must never learn about the parent's other schools;
   pending cross-school confirmations live in `parent_link_confirmations`, readable only by the parent.
@@ -156,7 +172,7 @@ npx playwright install chromium
 Day to day:
 
 ```bash
-npm run dev            # app at http://localhost:3000; sign-in codes print in this terminal
+npm run dev            # site: http://localhost:3000, app: http://app.localhost:3000 (sign-in codes print here)
 npm run db:migrate     # create/apply a migration after editing prisma/schema.prisma
 npm run db:generate    # regenerate the Prisma client (Prisma 7 does not do it on migrate)
 npm run db:studio      # browse the database

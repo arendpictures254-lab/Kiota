@@ -36,6 +36,9 @@ async function Schools({ searchParams }: Pick<PageProps<"/admin">, "searchParams
         <Notice tone="success">School created. We sent the Director an SMS.</Notice>
       ) : null}
       <ButtonLink href="/admin/schools/new">Create a school</ButtonLink>
+      <ButtonLink href="/admin/demo-requests" variant="secondary">
+        Demo requests
+      </ButtonLink>
       <ul className="flex flex-col gap-2">
         {schools.map((s) => (
           <li key={s.id} className="rounded-2xl border border-ink/10 bg-white p-4">

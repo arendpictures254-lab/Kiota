@@ -56,7 +56,9 @@ export async function makeMember(
   name = "Test",
 ) {
   const user = await owner.user.create({ data: { phone: randomPhone(), name } });
-  const membership = await owner.membership.create({ data: { schoolId, userId: user.id } });
+  const membership = await owner.membership.create({
+    data: { schoolId, userId: user.id, displayName: name },
+  });
   for (const key of roleKeys) {
     const role = await owner.role.findUniqueOrThrow({ where: { key } });
     await owner.membershipRole.create({

@@ -92,7 +92,7 @@ describe("a user in School A", () => {
     expect(await db.membership.findMany({ where: { schoolId: schoolB.id } })).toEqual([]);
     expect(await db.membership.findUnique({ where: { id: memberB.id } })).toBeNull();
     expect(await db.school.findUnique({ where: { id: schoolB.id } })).toBeNull();
-    expect(await db.user.findUnique({ where: { id: userB.id } })).toBeNull();
+    expect(await db.user.findUnique({ where: { id: userB.id }, select: { id: true } })).toBeNull();
     expect(await db.auditLog.findMany({ where: { schoolId: schoolB.id } })).toEqual([]);
   });
 
@@ -134,7 +134,9 @@ describe("a user in School A", () => {
   it("cannot insert rows into School B", async () => {
     await expect(
       withContext(app, ctxA(), (tx) =>
-        tx.membership.create({ data: { schoolId: schoolB.id, userId: userA.id } }),
+        tx.membership.create({
+          data: { schoolId: schoolB.id, userId: userA.id, displayName: "Intruder" },
+        }),
       ),
     ).rejects.toThrow(/row-level security/i);
   });
@@ -157,7 +159,7 @@ describe("a request with no school set", () => {
       expect(await db.$queryRaw<unknown[]>`SELECT * FROM memberships`).toEqual([]);
     }
     expect(await app.school.findMany()).toEqual([]);
-    expect(await app.user.findMany()).toEqual([]);
+    expect(await app.user.findMany({ select: { id: true } })).toEqual([]);
   });
 });
 

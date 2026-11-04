@@ -62,11 +62,16 @@ async function main() {
       });
     }
 
-    async function ensureMember(schoolId: string, userId: string, roles: readonly string[]) {
+    async function ensureMember(
+      schoolId: string,
+      userId: string,
+      displayName: string,
+      roles: readonly string[],
+    ) {
       const membership = await owner.membership.upsert({
         where: { schoolId_userId: { schoolId, userId } },
-        create: { schoolId, userId },
-        update: { status: "active" },
+        create: { schoolId, userId, displayName },
+        update: { status: "active", displayName },
       });
       for (const key of roles) {
         const roleId = roleIds.get(key);
@@ -94,13 +99,13 @@ async function main() {
       schoolIds.set(s.name, school.id);
       for (const person of s.staff) {
         const user = await ensureUser(person.phone, person.name);
-        await ensureMember(school.id, user.id, person.roles);
+        await ensureMember(school.id, user.id, person.name, person.roles);
       }
     }
 
     const shared = await ensureUser(SEED.sharedTeacher.phone, SEED.sharedTeacher.name);
     for (const m of SEED.sharedTeacher.memberships) {
-      await ensureMember(schoolIds.get(m.school)!, shared.id, m.roles);
+      await ensureMember(schoolIds.get(m.school)!, shared.id, SEED.sharedTeacher.name, m.roles);
     }
 
     await seedStudents(owner, schoolIds);

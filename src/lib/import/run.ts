@@ -11,7 +11,6 @@ import { assertCan } from "@/lib/auth/permissions";
 import { withContext, type Tx } from "@/lib/db-core";
 import { type Actor, type Deps, ValidationError, ctxOf } from "@/lib/service-kit";
 import { getStorage, schoolKey } from "@/lib/storage";
-import { linkGuardian } from "@/lib/students/service";
 import { type ImportContext, type ImportPlan, admissionKey, validateImport } from "./validate";
 import { type ReadProblem, type SheetRows, readWorkbook } from "./workbook";
 
@@ -26,7 +25,10 @@ export async function loadImportContext(tx: Tx, actor: Actor): Promise<ImportCon
       include: { classes: { orderBy: { position: "asc" }, include: { streams: true } } },
     }),
     tx.house.findMany(),
-    tx.membership.findMany({ where: { status: "active" }, include: { user: true } }),
+    tx.membership.findMany({
+      where: { status: "active" },
+      include: { user: { select: { phone: true } } },
+    }),
     tx.student.findMany({
       select: {
         admissionNumber: true,
@@ -218,10 +220,11 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
 
   const houses = new Map((await tx.house.findMany()).map((h) => [h.name.toLowerCase(), h.id]));
   const studentIds = new Map<string, string>();
+  const reason = `Imported from ${fileName}`.slice(0, 200);
 
-  for (const p of plan.students) {
+  const rowData = (p: ImportPlan["students"][number]) => {
     const cls = classByName.get(p.className.toLowerCase())!;
-    const data = {
+    return {
       upi: p.upi,
       firstName: p.firstName,
       middleName: p.middleName,
@@ -236,58 +239,143 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
       houseId: p.houseName ? houses.get(p.houseName.toLowerCase())! : null,
       specialNeeds: p.specialNeeds,
     };
-    const existing = await tx.student.findUnique({
-      where: { schoolId_admissionNumber: { schoolId, admissionNumber: p.admissionNumber } },
+  };
+
+  // Existing students (re-import): one query, then one UPDATE statement per batch.
+  const existing = await tx.student.findMany({
+    where: { admissionNumber: { in: plan.students.map((p) => p.admissionNumber) } },
+    select: { id: true, admissionNumber: true },
+  });
+  const existingIds = new Map(existing.map((s) => [s.admissionNumber, s.id]));
+  const updates = plan.students.filter((p) => existingIds.has(p.admissionNumber));
+  for (const batch of chunks(updates, BATCH)) {
+    const rows = batch.map((p) => {
+      const d = rowData(p);
+      return { ...d, id: existingIds.get(p.admissionNumber)!, dateOfBirth: p.dateOfBirth };
     });
-    let studentId: string;
-    if (existing) {
-      studentId = existing.id;
-      await tx.student.update({ where: { id: studentId }, data });
-    } else {
-      const created = await tx.student.create({
-        data: { ...data, schoolId, admissionNumber: p.admissionNumber, statusDate: today },
-      });
-      studentId = created.id;
-      await tx.studentStatusChange.create({
-        data: {
+    await tx.$executeRaw`
+      UPDATE students s SET
+        upi = v.upi, first_name = v."firstName", middle_name = v."middleName",
+        last_name = v."lastName", gender = v.gender::"Gender", date_of_birth = v."dateOfBirth",
+        class_id = v."classId", stream_id = v."streamId", boarder = v.boarder,
+        house_id = v."houseId", special_needs = v."specialNeeds", updated_at = now()
+      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS v(
+        id uuid, upi text, "firstName" text, "middleName" text, "lastName" text, gender text,
+        "dateOfBirth" date, "classId" uuid, "streamId" uuid, boarder boolean, "houseId" uuid,
+        "specialNeeds" text)
+      WHERE s.id = v.id`;
+  }
+  for (const p of updates)
+    studentIds.set(admissionKey(p.admissionNumber), existingIds.get(p.admissionNumber)!);
+
+  // New students: inserted in batches, with their first status-history row.
+  const fresh = plan.students.filter((p) => !existingIds.has(p.admissionNumber));
+  for (const batch of chunks(fresh, BATCH)) {
+    const created = await tx.student.createManyAndReturn({
+      data: batch.map((p) => ({
+        ...rowData(p),
+        schoolId,
+        admissionNumber: p.admissionNumber,
+        statusDate: today,
+      })),
+      select: { id: true, admissionNumber: true },
+    });
+    await tx.studentStatusChange.createMany({
+      data: created.map((s) => ({
+        schoolId,
+        studentId: s.id,
+        toStatus: "active" as const,
+        date: today,
+        reason,
+        changedBy: actor.userId,
+      })),
+    });
+    for (const s of created) studentIds.set(admissionKey(s.admissionNumber), s.id);
+  }
+  const idOf = (admissionNumber: string) => studentIds.get(admissionKey(admissionNumber))!;
+
+  // Medical notes (rare): one upsert each.
+  for (const p of plan.students) {
+    if (!p.medicalNotes && !p.allergies) continue;
+    const studentId = idOf(p.admissionNumber);
+    await tx.studentMedical.upsert({
+      where: { studentId },
+      create: { schoolId, studentId, medicalNotes: p.medicalNotes, allergies: p.allergies },
+      update: { medicalNotes: p.medicalNotes, allergies: p.allergies },
+    });
+  }
+
+  // Opening balances: new ones in batches; existing unposted ones updated.
+  const withBalance = plan.students.filter((p) => p.openingBalanceCents !== null);
+  const haveBalance = new Set(
+    (
+      await tx.openingBalance.findMany({
+        where: { studentId: { in: withBalance.map((p) => idOf(p.admissionNumber)) } },
+        select: { studentId: true },
+      })
+    ).map((b) => b.studentId),
+  );
+  for (const batch of chunks(withBalance, BATCH)) {
+    await tx.openingBalance.createMany({
+      data: batch
+        .filter((p) => !haveBalance.has(idOf(p.admissionNumber)))
+        .map((p) => ({
           schoolId,
-          studentId,
-          toStatus: "active",
-          date: today,
-          reason: `Imported from ${fileName}`.slice(0, 200),
-          changedBy: actor.userId,
-        },
-      });
-    }
-    studentIds.set(admissionKey(p.admissionNumber), studentId);
-
-    if (p.medicalNotes || p.allergies) {
-      await tx.studentMedical.upsert({
-        where: { studentId },
-        create: { schoolId, studentId, medicalNotes: p.medicalNotes, allergies: p.allergies },
-        update: { medicalNotes: p.medicalNotes, allergies: p.allergies },
-      });
-    }
-    if (p.openingBalanceCents !== null) {
-      await tx.openingBalance.upsert({
-        where: { studentId },
-        create: { schoolId, studentId, amountCents: p.openingBalanceCents, source: fileName },
-        update: { amountCents: p.openingBalanceCents, source: fileName },
-      });
-    }
+          studentId: idOf(p.admissionNumber),
+          amountCents: p.openingBalanceCents!,
+          source: fileName,
+        })),
+    });
+  }
+  const balanceUpdates = withBalance
+    .filter((p) => haveBalance.has(idOf(p.admissionNumber)))
+    .map((p) => ({ studentId: idOf(p.admissionNumber), amountCents: p.openingBalanceCents! }));
+  for (const batch of chunks(balanceUpdates, BATCH)) {
+    // Posted balances were excluded by validation; the database trigger refuses them anyway.
+    await tx.$executeRaw`
+      UPDATE opening_balances b SET amount_cents = v."amountCents", source = ${fileName}, updated_at = now()
+      FROM jsonb_to_recordset(${JSON.stringify(batch)}::jsonb) AS v("studentId" uuid, "amountCents" int)
+      WHERE b.student_id = v."studentId"
+        AND (b.amount_cents IS DISTINCT FROM v."amountCents" OR b.source IS DISTINCT FROM ${fileName})`;
   }
 
-  for (const g of plan.guardians) {
-    let studentId = studentIds.get(admissionKey(g.admissionNumber));
-    if (!studentId) {
-      const s = await tx.student.findUnique({
-        where: { schoolId_admissionNumber: { schoolId, admissionNumber: g.admissionNumber } },
-      });
-      if (!s) throw new ValidationError(`No student has admission number ${g.admissionNumber}.`);
-      studentId = s.id;
-    }
-    await linkGuardian(tx, studentId, g);
+  // Guardians: linked inside the database, a batch per round trip, through the same
+  // app_upsert_guardian_link() rules as one-by-one linking.
+  const missing = plan.guardians.filter((g) => !studentIds.has(admissionKey(g.admissionNumber)));
+  if (missing.length) {
+    const found = await tx.student.findMany({
+      where: { admissionNumber: { in: missing.map((g) => g.admissionNumber) } },
+      select: { id: true, admissionNumber: true },
+    });
+    for (const s of found) studentIds.set(admissionKey(s.admissionNumber), s.id);
   }
+  for (const batch of chunks(plan.guardians, BATCH)) {
+    const rows = batch.map((g) => {
+      const studentId = studentIds.get(admissionKey(g.admissionNumber));
+      if (!studentId)
+        throw new ValidationError(`No student has admission number ${g.admissionNumber}.`);
+      return {
+        studentId,
+        phone: g.phone,
+        name: g.name,
+        relationship: g.relationship,
+        language: g.language,
+        receivesFees: g.receivesFees,
+        receivesAcademics: g.receivesAcademics,
+        receivesBoarding: g.receivesBoarding,
+        authorisedToCollect: g.authorisedToCollect,
+      };
+    });
+    await tx.$queryRaw`SELECT app_upsert_guardian_links(${JSON.stringify(rows)}::jsonb)`;
+  }
+}
+
+const BATCH = 500;
+
+function chunks<T>(list: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
 }
 
 /** Template download data: the school's enabled levels and classes for the dropdowns. */

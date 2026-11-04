@@ -53,11 +53,12 @@ export async function listStaff({ db }: Deps, actor: Actor): Promise<StaffRow[]>
     const members = await tx.membership.findMany({
       where: { status: "active" },
       include: {
-        user: true,
+        // Only the phone: schools never read the platform name (memberships.display_name instead).
+        user: { select: { phone: true } },
         roles: { include: { role: { include: { permissions: true } } } },
         grants: true,
       },
-      orderBy: { user: { name: "asc" } },
+      orderBy: { displayName: "asc" },
     });
     return members.map((m) => {
       const fromRole = m.roles.some((r) =>
@@ -67,7 +68,7 @@ export async function listStaff({ db }: Deps, actor: Actor): Promise<StaffRow[]>
       return {
         membershipId: m.id,
         userId: m.userId,
-        name: m.user.name,
+        name: m.displayName,
         phone: m.user.phone,
         roles: m.roles.map((r) => ({ key: r.role.key, name: r.role.name })),
         canApproveLeaveouts: fromRole || fromGrant,
@@ -108,8 +109,13 @@ export async function inviteStaff(
       return { membershipId: existing.id, phone, alreadyMember: true };
     }
     const membership = existing
-      ? await tx.membership.update({ where: { id: existing.id }, data: { status: "active" } })
-      : await tx.membership.create({ data: { schoolId: actor.schoolId, userId } });
+      ? await tx.membership.update({
+          where: { id: existing.id },
+          data: { status: "active", displayName: name },
+        })
+      : await tx.membership.create({
+          data: { schoolId: actor.schoolId, userId, displayName: name },
+        });
 
     await tx.membershipRole.deleteMany({ where: { membershipId: membership.id } });
     await tx.membershipRole.createMany({

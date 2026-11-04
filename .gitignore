@@ -55,3 +55,7 @@ next-env.d.ts
 /.dev/
 /.storage/
 /.storage-test/
+!.env.production.example
+
+# server backups (docker-compose.prod.yml)
+/backups/

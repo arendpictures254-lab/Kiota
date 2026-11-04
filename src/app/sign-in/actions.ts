@@ -2,10 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { audit } from "@/lib/audit";
-import { clientIp, listMySchools } from "@/lib/auth/context";
+import { clientIp, getMe, listMySchools } from "@/lib/auth/context";
 import { createOtpService } from "@/lib/auth/otp";
 import { createSession, setSessionSchool } from "@/lib/auth/session";
-import { db, inContext, platformDb } from "@/lib/db";
+import { inContext, platformDb } from "@/lib/db";
 import { normalizePhone } from "@/lib/phone";
 import { sendSms } from "@/lib/sms";
 
@@ -66,14 +66,11 @@ export async function signInAction(_prev: SignInState, form: FormData): Promise<
     audit(tx, { schoolId: null, actorId: userId, action: "auth.sign_in", ip }),
   );
 
-  const [schools, me] = await Promise.all([
-    listMySchools(userId),
-    db({ userId, schoolId: null }).user.findUniqueOrThrow({ where: { id: userId } }),
-  ]);
+  const [schools, me] = await Promise.all([listMySchools(userId), getMe(userId)]);
   if (schools.length === 1) {
     await setSessionSchool(session.id, schools[0].school_id);
     redirect("/dashboard");
   }
-  if (schools.length === 0 && me.isPlatformAdmin) redirect("/admin");
+  if (schools.length === 0 && me?.isPlatformAdmin) redirect("/admin");
   redirect("/schools");
 }

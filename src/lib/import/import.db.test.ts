@@ -331,3 +331,38 @@ describe("guardians across schools", () => {
     expect(mine).toHaveLength(1);
   });
 });
+
+describe("performance", () => {
+  it("imports 300 students and 480 guardians in seconds, not minutes", async () => {
+    const { school, actor } = await schoolWithDirector("Perf");
+    const students = Array.from({ length: 300 }, (_, i) =>
+      studentRow(`PF-${i}`, { openingBalance: i % 2 ? "1000" : null }),
+    );
+    const guardians = students.flatMap((s, i) => [
+      {
+        admissionNumber: s.admissionNumber,
+        name: `M ${i}`,
+        phone: randomPhone(),
+        relationship: "Mother",
+      },
+      ...(i < 180
+        ? [
+            {
+              admissionNumber: s.admissionNumber,
+              name: `F ${i}`,
+              phone: randomPhone(),
+              relationship: "Father",
+            },
+          ]
+        : []),
+    ]);
+    const t0 = performance.now();
+    const { batchId } = await upload(actor, { Students: students, Guardians: guardians });
+    await confirmImport(deps, actor, batchId);
+    const seconds = (performance.now() - t0) / 1000;
+    expect(await owner.student.count({ where: { schoolId: school.id } })).toBe(300);
+    expect(await owner.guardianLink.count({ where: { schoolId: school.id } })).toBe(480);
+    // The full 1,000-student benchmark (npm run bench:import) takes about 4 s locally.
+    expect(seconds).toBeLessThan(30);
+  }, 60_000);
+});

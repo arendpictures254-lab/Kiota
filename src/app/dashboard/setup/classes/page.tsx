@@ -25,10 +25,10 @@ async function Classes() {
   const { actor, structure } = await loadSetup();
   const classes = enabledClasses(structure);
   const staff = await withContext(deps.db, ctxOf(actor), (tx) =>
-    tx.membership.findMany({ where: { status: "active" }, include: { user: true } }),
+    tx.membership.findMany({ where: { status: "active" } }),
   );
   const staffOptions = staff
-    .map((m) => ({ value: m.id, label: m.user.name }))
+    .map((m) => ({ value: m.id, label: m.displayName }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   return (

@@ -25,5 +25,6 @@ export default async function globalSetup() {
   const owner = new Client({ connectionString: ownerUrl });
   await owner.connect();
   await owner.query("DELETE FROM otp_codes");
+  await owner.query("DELETE FROM demo_requests");
   await owner.end();
 }

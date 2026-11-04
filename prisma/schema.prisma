@@ -126,12 +126,14 @@ enum MembershipStatus {
 
 /// Links a user to a school. A user may belong to several schools.
 model Membership {
-  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId  String           @map("school_id") @db.Uuid
-  userId    String           @map("user_id") @db.Uuid
-  status    MembershipStatus @default(active)
-  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String           @map("school_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  /// The school's own name for this staff member. Schools never read the platform users.name.
+  displayName String           @map("display_name")
+  status      MembershipStatus @default(active)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   school  School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   user    User              @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -602,4 +604,39 @@ model ImportBatch {
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@map("import_batches")
+}
+
+// ---------------------------------------------------------------------------
+// Public website (platform level, no school data)
+// ---------------------------------------------------------------------------
+
+enum DemoRequestStatus {
+  new
+  contacted
+  demo_booked
+  won
+  lost
+}
+
+/// "Book a demo" requests from kiota.app. Written through app_submit_demo_request();
+/// readable only by Arend admins. Never holds student or child details.
+model DemoRequest {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolName   String            @map("school_name")
+  county       String
+  contactName  String            @map("contact_name")
+  contactRole  String            @map("contact_role")
+  phone        String
+  email        String?
+  studentCount Int               @map("student_count")
+  schoolType   String            @map("school_type")
+  message      String?
+  status       DemoRequestStatus @default(new)
+  /// SHA-256 of the sender's IP address, for rate limiting only.
+  ipHash       String            @map("ip_hash")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([ipHash, createdAt])
+  @@map("demo_requests")
 }

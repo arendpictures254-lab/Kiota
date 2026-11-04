@@ -28,7 +28,7 @@ async function Dashboard() {
     <div className="flex flex-col gap-5">
       <div>
         <p className="text-sm font-semibold tracking-wide text-twig uppercase">{ctx.school.name}</p>
-        <h1 className="font-heading text-2xl font-bold text-ink">Hello, {ctx.user.name}</h1>
+        <h1 className="font-heading text-2xl font-bold text-ink">Hello, {ctx.displayName}</h1>
         <p className="text-ink/70">{ctx.roles.map((r) => r.name).join(", ")}</p>
       </div>
 

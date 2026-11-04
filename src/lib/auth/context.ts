@@ -25,6 +25,8 @@ export type SchoolContext = {
   user: CurrentUser;
   school: { id: string; name: string; shortName: string; supportAccessUntil: Date | null };
   membershipId: string;
+  /** This school's own name for the user (never the platform name). */
+  displayName: string;
   roles: { key: string | null; name: string }[];
   permissions: ReadonlySet<PermissionKey>;
   /** Pass to db()/inContext() so row-level security scopes every query to this school. */
@@ -38,21 +40,26 @@ export type MySchool = {
   role_names: string[];
 };
 
+/**
+ * A user's own platform record. The app role cannot read users.name directly (it may have been
+ * typed by another school), so this goes through app_me(), which only returns the caller.
+ */
+export async function getMe(userId: string) {
+  const [me] = await db({ userId, schoolId: null }).$queryRaw<
+    { id: string; name: string; phone: string; is_platform_admin: boolean }[]
+  >`SELECT * FROM app_me()`;
+  return me
+    ? { id: me.id, name: me.name, phone: me.phone, isPlatformAdmin: me.is_platform_admin }
+    : null;
+}
+
 /** The signed-in user, or null. Cached for the rest of this request. */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await readSession();
   if (!session) return null;
-  const user = await db({ userId: session.userId, schoolId: null }).user.findUnique({
-    where: { id: session.userId },
-  });
+  const user = await getMe(session.userId);
   if (!user) return null;
-  return {
-    session,
-    id: user.id,
-    name: user.name,
-    phone: user.phone,
-    isPlatformAdmin: user.isPlatformAdmin,
-  };
+  return { session, ...user };
 });
 
 export async function requireUser(): Promise<CurrentUser> {
@@ -107,6 +114,7 @@ export const getSchoolContext = cache(async (): Promise<SchoolContext | null> =>
       supportAccessUntil: school.supportAccessUntil,
     },
     membershipId: membership.id,
+    displayName: membership.displayName,
     roles: membership.roles.map((r) => ({ key: r.role.key, name: r.role.name })),
     permissions,
     dbContext,

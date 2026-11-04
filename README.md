@@ -16,7 +16,13 @@ npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in with a test number below. There is no real SMS in
+Two addresses, like production (kiota.app and app.kiota.app):
+
+- **Public site:** http://localhost:3000
+- **App (sign in):** http://app.localhost:3000
+
+Chrome, Edge and Firefox resolve `app.localhost` to your own computer automatically. Sign in
+with a test number below. There is no real SMS in
 development: the 6-digit code prints in the terminal running `npm run dev` (and is appended to
 `.dev/sms-outbox.log`).
 
@@ -58,3 +64,9 @@ Sign in as Amina Said (0711 000 001), open **Students → Import from Excel**.
 4. Search for "Rehema" in Students. Uploading the same file again updates, never duplicates.
 
 The samples are written for the seeded Bahari Academy; rebuild them with `npm run samples`.
+
+## Deploying
+
+See [docs/deploy.md](docs/deploy.md) for a single Ubuntu server with Docker, Caddy (automatic
+HTTPS) and nightly backups, and [docs/launch-checklist.md](docs/launch-checklist.md) for what must
+happen before a school goes live.

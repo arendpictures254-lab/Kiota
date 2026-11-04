@@ -1,0 +1,38 @@
+# Caddy: automatic HTTPS (Let's Encrypt) for the three addresses. .app domains only work over
+# HTTPS (the whole .app top-level domain is on the browser HSTS preload list).
+{
+	email {$ACME_EMAIL}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
+
+# Public site
+{$SITE_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy app:3000
+}
+
+# www -> the bare domain
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
+# The app (sign-in and everything behind it)
+{$APP_DOMAIN} {
+	import security_headers
+	header X-Frame-Options "DENY"
+	encode zstd gzip
+	request_body {
+		max_size 8MB
+	}
+	reverse_proxy app:3000
+}

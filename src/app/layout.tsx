@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Syne } from "next/font/google";
+import { SITE_URL } from "@/lib/hosts";
 import "./globals.css";
 
 const syne = Syne({
@@ -15,8 +16,17 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Kiota",
-  description: "Every child, one place. School management for Kenyan schools.",
+  description:
+    "Kiota runs fees, report cards, parent messages and boarding for Kenyan schools, from primary to senior school.",
+  applicationName: "Kiota",
+  openGraph: {
+    type: "website",
+    siteName: "Kiota",
+    locale: "en_KE",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {

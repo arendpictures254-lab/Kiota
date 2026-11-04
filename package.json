@@ -22,7 +22,8 @@
     "db:local": "tsx scripts/dev-db.ts",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
-    "samples": "tsx scripts/make-import-samples.ts"
+    "samples": "tsx scripts/make-import-samples.ts",
+    "bench:import": "tsx scripts/bench-import.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

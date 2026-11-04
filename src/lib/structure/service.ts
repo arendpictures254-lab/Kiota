@@ -83,7 +83,7 @@ export async function getStructure({ db }: Deps, actor: Actor) {
             include: {
               streams: {
                 orderBy: { name: "asc" },
-                include: { classTeacher: { include: { user: true } } },
+                include: { classTeacher: { select: { displayName: true } } },
               },
             },
           },
