@@ -7,7 +7,8 @@
  */
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma/client";
-import type { SmsMessage } from "@/lib/sms";
+/** Sign-in codes are platform messages: Kiota's sender ID, paid by Arend Studio, no wallet. */
+type SmsMessage = { to: string; text: string };
 
 export const OTP_TTL_MS = 5 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;

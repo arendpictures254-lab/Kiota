@@ -27,9 +27,10 @@ Add to this list whenever something must happen before launch. Tick items off wi
 ## Sign-in and security
 
 - [ ] **Per-IP rate limit on sign-in code requests** (today: 3 codes per phone per 15 minutes only).
-- [ ] **Real SMS driver** (Africa's Talking) behind `sendSms()`. The console driver refuses to run
-      in production unless `ALLOW_CONSOLE_SMS=1`, which is for staging only: turn it off before
-      real users arrive.
+- [x] **Real SMS driver** (Africa's Talking) behind `sendSms()`. _Done (sandbox and live). The
+      server refuses to start in production with the console driver or `ALLOW_CONSOLE_SMS=1`
+      unless `KIOTA_DEMO=1` marks a demo server. Not yet tested against Africa's Talking itself:
+      see Messaging below._
 
 ## Before real money flows (fees and M-Pesa)
 
@@ -56,12 +57,45 @@ Add to this list whenever something must happen before launch. Tick items off wi
       org portal with Kiota's daily collection report, and clear suspense every day.
 - [ ] **Print a thermal receipt on the pilot school's own printer** (80 mm) and an A4 receipt, and
       upload the school's crest (School setup → School crest).
-- [ ] **Fee reminders:** "Send reminder" on the defaulters list is a stub (it records the request in
-      the audit log). Wire it to SMS/WhatsApp before telling the school it works.
+- [x] **Fee reminders:** _Done: the defaulters list sends real reminders (SMS, from the wallet,
+      after a cost preview)._
 - [ ] **Back-dated payments:** payments dated more than 120 days ago are refused; decide with the
       school how those are entered (today there is no override).
 - [ ] **Receipt share links** (`/r/<token>`) never expire. Decide whether they should, before
       sending them to parents.
+
+## Messaging (SMS, WhatsApp, wallet)
+
+Details and exact settings: docs/messaging.md. These depend on third parties and take weeks.
+
+- [ ] **Africa's Talking account** for Arend Studio verified; live API key in the password manager.
+- [ ] **Test in the Africa's Talking sandbox** (`AT_ENVIRONMENT=sandbox`): a notice, a payment
+      confirmation and a delivery report through the real callback URL. So far SMS was tested only
+      with the console driver and `npm run sms:simulate`: no call has been made to AT yet.
+- [ ] **Sender ID KIOTA** approved by Safaricom, Airtel and Telkom (sign-in codes).
+- [ ] **The pilot school's sender ID** (e.g. its short name) approved by the networks, with the
+      school's authorisation letter; entered and ticked "approved" under Admin → Messaging wallets.
+- [ ] **Delivery report URL** set in the AT dashboard with a long random `SMS_CALLBACK_TOKEN`.
+- [ ] **Prepaid credit on the Africa's Talking account** before opening day (the invitation SMS to
+      every parent), with AT's low-balance alert on.
+- [ ] **Confirm the licensing position for reselling bulk SMS** (Communications Authority).
+- [ ] **Meta Business verification** for Arend Studio, a WhatsApp Business number and the "Kiota"
+      display name approved.
+- [ ] **WhatsApp templates approved by Meta** in English and Kiswahili (`kiota_payment_receipt`,
+      `kiota_fee_reminder`, `kiota_notice`, `kiota_report_card`, `kiota_leaveout_alert`), each
+      marked approved under Admin → Messaging wallets. Until then everything goes by SMS.
+- [ ] **WhatsApp webhook** set in Meta with `WHATSAPP_VERIFY_TOKEN` and `WHATSAPP_APP_SECRET`;
+      test one real template message, a receipt PDF, and a failure falling back to SMS.
+- [ ] **Arend Studio's own Paybill or Till** from Safaricom, with Daraja Go Live for M-Pesa Express
+      (STK Push) and its passkey: `PLATFORM_MPESA_*` set on the server. Never a school's Paybill.
+- [ ] **A real KES 10 wallet top-up** by STK Push on that Paybill, checked against the Safaricom
+      statement and the wallet page.
+- [ ] **Prices per school** (per SMS unit and per WhatsApp message) set above Africa's Talking's and
+      Meta's rates, plus the overdraft for critical messages and the pilot school's starter credit.
+- [ ] **Quiet hours** (21:00 to 07:00) agreed with the pilot school, and which notices count as
+      emergencies.
+- [ ] **`QUIET_HOURS` is not "off"** and `ALLOW_CONSOLE_SMS` / `KIOTA_DEMO` are not set in
+      production.
 
 ## Public website
 

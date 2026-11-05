@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ActionForm } from "@/components/action-form";
+import { SendConfirmForm } from "@/components/send-confirm-form";
 import { Button, Card, Loading, Notice, Select } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { kes, receiptNo } from "@/lib/fees/allocation";
 import { METHODS } from "@/lib/fees/payments";
 import { collectedVsExpected, dailyCollection, defaulters } from "@/lib/fees/reports";
 import { getFeeSetup } from "@/lib/fees/setup";
+import { canSendFeeReminders } from "@/lib/messaging/service";
 import { formatPhone } from "@/lib/phone";
 import { getStructure, enabledClasses } from "@/lib/structure/service";
 import { sendRemindersAction } from "../actions";
@@ -238,11 +239,10 @@ async function Defaulters({
       <p className="text-sm text-ink/70">
         {rows.length} student{rows.length === 1 ? "" : "s"} owe {kes(total)}.
       </p>
-      {rows.length ? (
-        <ActionForm
+      {rows.length && canSendFeeReminders(actor.permissions) ? (
+        <SendConfirmForm
           action={sendRemindersAction}
-          submitLabel="Send reminder to selected parents"
-          variant="secondary"
+          checkLabel="Remind selected parents: check cost"
         >
           <ul className="flex flex-col gap-2">
             {rows.map((r) => (
@@ -276,7 +276,7 @@ async function Defaulters({
               </li>
             ))}
           </ul>
-        </ActionForm>
+        </SendConfirmForm>
       ) : null}
     </div>
   );

@@ -1,12 +1,13 @@
 // @vitest-environment node
-import { NextRequest } from "next/server";
+import { NextRequest, type NextResponse } from "next/server";
 import { describe, expect, it } from "vitest";
 import { proxy } from "./proxy";
 
 // Development defaults: site on localhost:3000, app on app.localhost:3000.
 function hit(url: string) {
   const u = new URL(url);
-  const res = proxy(new NextRequest(url, { headers: { host: u.host } }));
+  // Only receipt links are checked asynchronously (tested below).
+  const res = proxy(new NextRequest(url, { headers: { host: u.host } })) as NextResponse;
   return {
     status: res.status,
     // Cross-address redirects go through /go-to?to=<url>.
@@ -65,5 +66,16 @@ describe("any other host", () => {
   it("gets nothing", () => {
     expect(hit("http://203.0.113.5/dashboard").status).toBe(404);
     expect(hit("http://evil.example/").status).toBe(404);
+  });
+});
+
+describe("receipt share links", () => {
+  it("answer a malformed link with the real 404 route, before the page renders", async () => {
+    const res = await proxy(
+      new NextRequest("http://app.localhost:3000/r/not-a-real-link", {
+        headers: { host: "app.localhost:3000" },
+      }),
+    );
+    expect(res.headers.get("x-middleware-rewrite")).toContain("/_not-found-kiota");
   });
 });

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ActionForm } from "@/components/action-form";
 import { Loading } from "@/components/ui";
 import { deps } from "@/lib/actions";
+import { canSeeMessages } from "@/lib/messaging/service";
 import { formatPhone } from "@/lib/phone";
 import { getStudent } from "@/lib/students/service";
 import { removeGuardianAction, updateGuardianAction } from "../../../actions";
@@ -40,6 +42,14 @@ async function Guardian({ params }: Pick<Props, "params">) {
         Phone {formatPhone(g.user.phone)}. To change the number, add the guardian again with the new
         number and remove this one.
       </p>
+      {canSeeMessages(actor.permissions) ? (
+        <Link
+          href={`/dashboard/messages/log?guardian=${g.id}`}
+          className="text-sm font-semibold text-teal"
+        >
+          Messages sent to {g.name}
+        </Link>
+      ) : null}
       <ActionForm action={updateGuardianAction} submitLabel="Save guardian">
         <input type="hidden" name="studentId" value={s.id} />
         <input type="hidden" name="linkId" value={g.id} />
@@ -53,6 +63,7 @@ async function Guardian({ params }: Pick<Props, "params">) {
             receivesAcademics: g.receivesAcademics,
             receivesBoarding: g.receivesBoarding,
             authorisedToCollect: g.authorisedToCollect,
+            whatsapp: g.whatsapp,
           }}
         />
       </ActionForm>

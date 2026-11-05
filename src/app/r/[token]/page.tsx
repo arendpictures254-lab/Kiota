@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import { PrintButton } from "@/components/print-button";
 import { ReceiptSheet } from "@/components/receipt-sheet";
-import { Loading } from "@/components/ui";
 import { platformDb } from "@/lib/db";
 import { getPublicReceipt, schoolCrest } from "@/lib/fees/receipts";
 import { APP_URL } from "@/lib/hosts";
@@ -14,24 +12,22 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-/** Public receipt behind an unguessable share link (sent to parents by SMS/WhatsApp). */
-export default function PublicReceiptPage({ params }: PageProps<"/r/[token]">) {
-  return (
-    <main className="flex flex-1 flex-col items-center gap-4 bg-cream px-3 py-6">
-      <Suspense fallback={<Loading />}>
-        <Receipt params={params} />
-      </Suspense>
-    </main>
-  );
-}
+/**
+ * An unknown link gets its real HTTP 404 from src/proxy.ts, which checks the link before the
+ * page renders: with Cache Components the static shell is sent (200) before this page runs,
+ * so notFound() here can only show the not-found page. The page blocks on the lookup rather
+ * than streaming, so it never flashes a loading state.
+ */
+export const instant = false;
 
-async function Receipt({ params }: Pick<PageProps<"/r/[token]">, "params">) {
+/** Public receipt behind an unguessable share link (sent to parents by SMS/WhatsApp). */
+export default async function PublicReceiptPage({ params }: PageProps<"/r/[token]">) {
   const { token } = await params;
   const r = await getPublicReceipt(platformDb, token);
   if (!r) notFound();
   const crest = await schoolCrest(r.school.logoKey, r.school.id);
   return (
-    <>
+    <main className="flex flex-1 flex-col items-center gap-4 bg-cream px-3 py-6">
       <div className="w-full max-w-md overflow-x-auto rounded-2xl bg-white shadow-sm">
         <ReceiptSheet
           r={r}
@@ -51,6 +47,6 @@ async function Receipt({ params }: Pick<PageProps<"/r/[token]">, "params">) {
           Download PDF
         </a>
       </div>
-    </>
+    </main>
   );
 }

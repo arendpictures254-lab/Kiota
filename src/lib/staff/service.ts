@@ -13,7 +13,8 @@ import { type Actor, type Deps, ValidationError, ctxOf } from "@/lib/service-kit
 export { type Actor, ValidationError };
 
 export const LEAVEOUT_APPROVE: PermissionKey = "leaveout.approve";
-export const SYSTEM_ROLE = "system_payments";
+/** Kiota's own hidden members (automatic payments, automatic messages) are not staff. */
+export const SYSTEM_ROLES = BUILT_IN_ROLES.filter((r) => r.hidden).map((r) => r.key);
 
 async function roleIdsFor(tx: Tx, roleKeys: readonly string[]) {
   const unique = [...new Set(roleKeys)];
@@ -55,7 +56,7 @@ export async function listStaff({ db }: Deps, actor: Actor): Promise<StaffRow[]>
   return withContext(db, ctxOf(actor), async (tx) => {
     const members = await tx.membership.findMany({
       // Kiota's own automatic-payments member is not staff.
-      where: { status: "active", roles: { none: { role: { key: SYSTEM_ROLE } } } },
+      where: { status: "active", roles: { none: { role: { key: { in: SYSTEM_ROLES } } } } },
       include: {
         // Only the phone: schools never read the platform name (memberships.display_name instead).
         user: { select: { phone: true } },

@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { createClient } from "../src/lib/db-core";
 import { seedFees } from "./seed-fees";
+import { seedMessageHistory, seedWallets } from "./seed-messaging";
 import { seedStudents } from "./seed-students";
 import { enableAppRoleLogin, syncCatalog } from "./setup";
 
@@ -110,9 +111,21 @@ async function main() {
     }
 
     await seedStudents(owner, schoolIds);
+    const messagingSchools = SEED.schools.map((s) => ({
+      id: schoolIds.get(s.name)!,
+      name: s.name,
+      shortName: s.shortName,
+      directorPhone: s.staff[0].phone,
+      bursarPhone: s.staff[1].phone,
+    }));
+    // Credit first, so the fees seed's payments send (and pay for) real confirmations.
+    await seedWallets(owner, messagingSchools);
     await seedFees(owner, schoolIds.get("Bahari Academy")!);
+    await seedMessageHistory(owner, messagingSchools);
 
-    console.log("Seeded Bahari Academy, Milima School, their students and the Arend admin.");
+    console.log(
+      "Seeded Bahari Academy, Milima School, their students, fees, messaging wallets and the Arend admin.",
+    );
   } finally {
     await owner.$disconnect();
   }

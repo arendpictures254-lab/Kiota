@@ -153,6 +153,7 @@ export type GuardianDefaults = Partial<{
   receivesAcademics: boolean;
   receivesBoarding: boolean;
   authorisedToCollect: boolean;
+  whatsapp: boolean;
 }>;
 
 /** Guardian fields. `prefix` (g1_, g2_...) lets several guardians share one form. */
@@ -172,6 +173,7 @@ export function GuardianFields({
     receivesAcademics: true,
     receivesBoarding: true,
     authorisedToCollect: true,
+    whatsapp: false,
     ...defaults,
   };
   return (
@@ -227,6 +229,12 @@ export function GuardianFields({
           name={`${prefix}authorisedToCollect`}
           label="Authorised to collect at leave-out"
           defaultChecked={d.authorisedToCollect}
+        />
+        <Checkbox
+          name={`${prefix}whatsapp`}
+          label="Uses WhatsApp"
+          description="Receipts can also go by WhatsApp. SMS is used when WhatsApp does not work."
+          defaultChecked={d.whatsapp}
         />
       </div>
     </>

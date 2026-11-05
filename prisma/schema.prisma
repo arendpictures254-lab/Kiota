@@ -547,6 +547,8 @@ model GuardianLink {
   receivesAcademics   Boolean              @default(true) @map("receives_academics")
   receivesBoarding    Boolean              @default(true) @map("receives_boarding")
   authorisedToCollect Boolean              @default(false) @map("authorised_to_collect")
+  /// The school says this phone number uses WhatsApp (messages may go there, SMS as fallback).
+  whatsapp            Boolean              @default(false)
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -1001,4 +1003,204 @@ model MpesaTransaction {
   @@unique([schoolId, transId])
   @@index([schoolId, status])
   @@map("mpesa_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging: SMS and WhatsApp from a prepaid wallet per school
+// ---------------------------------------------------------------------------
+
+enum MessageChannel {
+  sms
+  whatsapp
+}
+
+enum MessageStatus {
+  queued
+  sending
+  sent
+  delivered
+  failed
+}
+
+/// One prepaid messaging wallet per school. Prices, overdraft and the sender ID are set by
+/// Arend Studio only (app_admin_set_wallet); the school sets its low-balance alert threshold.
+/// The balance is never stored: it is always SUM(wallet_entries.amount_cents).
+model Wallet {
+  schoolId                 String    @id @map("school_id") @db.Uuid
+  /// Price per SMS unit (one 160-character GSM-7 part), integer cents.
+  smsUnitPriceCents        Int       @default(100) @map("sms_unit_price_cents")
+  /// Price per WhatsApp template message, integer cents.
+  whatsappPriceCents       Int       @default(150) @map("whatsapp_price_cents")
+  /// How far below zero critical messages (leave-out alerts, emergencies) may take the wallet.
+  overdraftLimitCents      Int       @default(20000) @map("overdraft_limit_cents")
+  lowBalanceThresholdCents Int       @default(50000) @map("low_balance_threshold_cents")
+  /// When the Director and Bursar were last told the balance is low. Cleared by a top-up.
+  lowBalanceAlertedAt      DateTime? @map("low_balance_alerted_at") @db.Timestamptz(3)
+  /// The school's own SMS sender ID (max 11 characters), once the networks approve it.
+  senderId                 String?   @map("sender_id") @db.VarChar(11)
+  senderIdApproved         Boolean   @default(false) @map("sender_id_approved")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("wallets")
+}
+
+enum WalletEntryType {
+  /// M-Pesa top-up confirmed by Safaricom.
+  topup
+  /// Bank transfer recorded by an Arend admin.
+  manual_topup
+  /// Free credit from Arend Studio.
+  starter_credit
+  /// Cost of a message, taken when it is queued.
+  reserve
+  /// A failed message gives its cost back.
+  refund
+  /// The provider counted a different number of units than estimated.
+  adjustment
+}
+
+/// The wallet ledger. Append-only (grants and a trigger). Positive = credit, negative = spent.
+model WalletEntry {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String          @map("school_id") @db.Uuid
+  type        WalletEntryType
+  amountCents Int             @map("amount_cents")
+  description String
+  messageId   String?         @map("message_id") @db.Uuid
+  /// One credit per top-up, ever (duplicate callbacks cannot credit twice).
+  topupId     String?         @unique @map("topup_id") @db.Uuid
+  createdById String?         @map("created_by_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  /// One reserve, one refund and one adjustment per message at most.
+  @@unique([messageId, type])
+  @@index([schoolId, createdAt])
+  @@map("wallet_entries")
+}
+
+/// A request to add money to a wallet: M-Pesa STK Push to Arend Studio's own Paybill, a manual
+/// bank top-up or starter credit. Not a money record: the credit is the wallet entry.
+model WalletTopup {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String    @map("school_id") @db.Uuid
+  /// "mpesa", "manual" or "starter".
+  method            String
+  amountCents       Int       @map("amount_cents")
+  /// stk_requested, pending_verification, verification_failed, posting, completed, failed
+  status            String
+  statusDetail      String?   @map("status_detail")
+  phone             String?
+  checkoutRequestId String?   @unique @map("checkout_request_id")
+  /// M-Pesa receipt number.
+  transId           String?   @unique @map("trans_id")
+  reference         String?
+  note              String?
+  requestedById     String?   @map("requested_by_id") @db.Uuid
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([schoolId, createdAt])
+  @@map("wallet_topups")
+}
+
+/// Platform registry of message templates (configuration, not code): one row per template and
+/// language. WhatsApp templates must be approved by Meta before they are used.
+model MessageTemplate {
+  key            String
+  language       Language
+  description    String
+  /// fees, academics, boarding or general: which guardian setting applies.
+  category       String
+  /// Critical messages go out during quiet hours and, within the overdraft, from an empty wallet.
+  critical       Boolean  @default(false)
+  /// SMS text with {placeholders}; [[ ... ]] is left out when a placeholder inside is empty.
+  smsBody        String   @map("sms_body")
+  whatsappName   String?  @map("whatsapp_name")
+  /// The approved WhatsApp text, for display ({{1}}, {{2}}...).
+  whatsappBody   String?  @map("whatsapp_body")
+  /// Placeholder names that fill {{1}}, {{2}}... in order.
+  whatsappParams String[] @map("whatsapp_params")
+  /// "document" when the template carries a PDF (receipts).
+  whatsappHeader String?  @map("whatsapp_header")
+  /// not_submitted, pending, approved, rejected
+  whatsappStatus String   @default("not_submitted") @map("whatsapp_status")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([key, language])
+  @@map("message_templates")
+}
+
+/// A bulk send: a notice or a batch of fee reminders.
+model MessageCampaign {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String         @map("school_id") @db.Uuid
+  /// "notice" or "fee_reminder".
+  kind        String
+  title       String
+  body        String?
+  bodySw      String?        @map("body_sw")
+  audience    Json
+  channel     MessageChannel
+  category    String
+  critical    Boolean        @default(false)
+  recipients  Int
+  units       Int
+  costCents   Int            @map("cost_cents")
+  createdById String         @map("created_by_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([schoolId, createdAt])
+  @@map("message_campaigns")
+}
+
+/// One message to one phone. The messages table is also the sending queue (status queued,
+/// next_attempt_at). Row-level security: the Director (messages.view_all) sees all; others see
+/// messages about students they can see (a class teacher: their streams).
+model Message {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String         @map("school_id") @db.Uuid
+  campaignId        String?        @map("campaign_id") @db.Uuid
+  studentId         String?        @map("student_id") @db.Uuid
+  guardianLinkId    String?        @map("guardian_link_id") @db.Uuid
+  toPhone           String         @map("to_phone")
+  channel           MessageChannel
+  language          Language
+  templateKey       String         @map("template_key")
+  category          String
+  critical          Boolean        @default(false)
+  /// The text sent (SMS) or shown (WhatsApp).
+  body              String
+  /// Placeholder values, kept so a failed WhatsApp message can be re-sent as SMS.
+  params            Json?
+  mediaUrl          String?        @map("media_url")
+  units             Int
+  /// Reserved cost (the wallet entries are the money record).
+  costCents         Int            @map("cost_cents")
+  status            MessageStatus  @default(queued)
+  attempts          Int            @default(0)
+  nextAttemptAt     DateTime       @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lockedAt          DateTime?      @map("locked_at") @db.Timestamptz(3)
+  provider          String?
+  providerMessageId String?        @map("provider_message_id")
+  error             String?
+  /// A WhatsApp message that is re-sent as SMS if it cannot be delivered.
+  fallbackToSms     Boolean        @default(false) @map("fallback_to_sms")
+  /// The WhatsApp message this SMS replaces.
+  fallbackOfId      String?        @map("fallback_of_id") @db.Uuid
+  createdById       String?        @map("created_by_id") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentAt            DateTime?      @map("sent_at") @db.Timestamptz(3)
+  deliveredAt       DateTime?      @map("delivered_at") @db.Timestamptz(3)
+  failedAt          DateTime?      @map("failed_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([provider, providerMessageId])
+  @@index([schoolId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([studentId])
+  @@index([guardianLinkId])
+  @@index([campaignId])
+  @@map("messages")
 }

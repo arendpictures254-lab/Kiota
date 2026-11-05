@@ -39,6 +39,9 @@ async function Schools({ searchParams }: Pick<PageProps<"/admin">, "searchParams
       <ButtonLink href="/admin/demo-requests" variant="secondary">
         Demo requests
       </ButtonLink>
+      <ButtonLink href="/admin/messaging" variant="secondary">
+        Messaging wallets and templates
+      </ButtonLink>
       <ul className="flex flex-col gap-2">
         {schools.map((s) => (
           <li key={s.id} className="rounded-2xl border border-ink/10 bg-white p-4">

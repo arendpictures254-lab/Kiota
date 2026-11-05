@@ -87,6 +87,7 @@ describe("value parsers", () => {
       receivesAcademics: false,
       receivesBoarding: false,
       authorisedToCollect: false,
+      whatsapp: false,
     });
     expect(guardianDefaults("mother").authorisedToCollect).toBe(true);
   });

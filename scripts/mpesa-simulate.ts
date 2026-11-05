@@ -8,7 +8,12 @@
  *   npm run mpesa:simulate -- fake --account BA/2025/001 --amount 9999   (Safaricom never saw it)
  *   npm run mpesa:simulate -- stk                                        (parent pays latest prompt)
  *   npm run mpesa:simulate -- stk --cancel                               (parent cancels it)
+ *   npm run mpesa:simulate -- topup                       (Director pays the latest wallet top-up)
+ *   npm run mpesa:simulate -- topup --cancel              (Director cancels it)
  *   npm run mpesa:simulate -- list
+ *
+ * Wallet top-ups go to Arend Studio's own Paybill (PLATFORM_MPESA_* in .env, environment
+ * "simulator"), not to a school, so `topup` needs no --school.
  *
  * Options: --school "Bahari Academy" (default: the only/first school with M-Pesa settings),
  *          --base http://localhost:3000, --phone 0712345678, --name "MARY OTIENO"
@@ -17,7 +22,7 @@ import "dotenv/config";
 import { decryptSecret } from "../src/lib/crypto";
 import { createClient } from "../src/lib/db-core";
 import { darajaTimestamp } from "../src/lib/mpesa/daraja";
-import { readSimStore, simTransId, writeSimStore } from "../src/lib/mpesa/simulator";
+import { type SimStk, readSimStore, simTransId, writeSimStore } from "../src/lib/mpesa/simulator";
 import { normalizePhone } from "../src/lib/phone";
 
 function arg(name: string, fallback?: string) {
@@ -89,6 +94,62 @@ function c2bBody(transId: string, amount: number, account: string, shortcode: st
   };
 }
 
+/** The person answers the STK prompt on their phone: pay (default) or --cancel. */
+async function finishStk(store: ReturnType<typeof readSimStore>, stk: SimStk, base: string) {
+  const callback = (body: unknown) => {
+    // Real Daraja calls the URL in the request; send it to this computer's server instead.
+    const u = new URL(stk.callbackUrl);
+    return send(`${base}${u.pathname}`, body);
+  };
+  if (flag("cancel")) {
+    stk.status = "cancelled";
+    writeSimStore(store);
+    console.log(`Cancelled on the phone: ${stk.checkoutRequestId}`);
+    await callback({
+      Body: {
+        stkCallback: {
+          MerchantRequestID: stk.merchantRequestId,
+          CheckoutRequestID: stk.checkoutRequestId,
+          ResultCode: 1032,
+          ResultDesc: "Request cancelled by user",
+        },
+      },
+    });
+    return;
+  }
+  const transId = simTransId();
+  stk.status = "completed";
+  stk.transId = transId;
+  store.transactions[transId] = {
+    transId,
+    amountCents: stk.amountShillings * 100,
+    msisdn: stk.phone,
+    billRef: stk.accountReference,
+    shortcode: stk.shortcode,
+    time: new Date().toISOString(),
+  };
+  writeSimStore(store);
+  console.log(`Paid KES ${stk.amountShillings} from ${stk.phone}: ${transId}`);
+  await callback({
+    Body: {
+      stkCallback: {
+        MerchantRequestID: stk.merchantRequestId,
+        CheckoutRequestID: stk.checkoutRequestId,
+        ResultCode: 0,
+        ResultDesc: "The service request is processed successfully.",
+        CallbackMetadata: {
+          Item: [
+            { Name: "Amount", Value: stk.amountShillings },
+            { Name: "MpesaReceiptNumber", Value: transId },
+            { Name: "TransactionDate", Value: Number(darajaTimestamp()) },
+            { Name: "PhoneNumber", Value: Number(stk.phone) },
+          ],
+        },
+      },
+    },
+  });
+}
+
 async function main() {
   const command = process.argv[2];
   const base = (
@@ -98,6 +159,23 @@ async function main() {
 
   if (command === "list") {
     console.log(JSON.stringify(store, null, 2));
+    return;
+  }
+
+  if (command === "topup") {
+    const shortcode = process.env.PLATFORM_MPESA_SHORTCODE;
+    if (!shortcode) throw new Error("Set PLATFORM_MPESA_* in .env (see .env.example)");
+    const id = arg("checkout");
+    const pending = Object.values(store.stk)
+      .filter((x) => x.status === "pending" && x.shortcode === shortcode)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const stk = id ? store.stk[id] : pending[0];
+    if (!stk)
+      throw new Error(
+        "No top-up prompt is waiting. Start one from Messages → Wallet → Top up first.",
+      );
+    console.log(`Wallet top-up to Arend Studio's Paybill ${shortcode}:`);
+    await finishStk(store, stk, base);
     return;
   }
 
@@ -149,62 +227,13 @@ async function main() {
     const stk = id ? store.stk[id] : pending[0];
     if (!stk)
       throw new Error("No STK prompt is waiting. Send one from Fees → Send M-Pesa prompt first.");
-    const callback = (body: unknown) => {
-      // Real Daraja calls the URL in the request; send it to this computer's server instead.
-      const u = new URL(stk.callbackUrl);
-      return send(`${base}${u.pathname}`, body);
-    };
-    if (flag("cancel")) {
-      stk.status = "cancelled";
-      writeSimStore(store);
-      console.log(`Parent cancelled the prompt ${stk.checkoutRequestId}`);
-      await callback({
-        Body: {
-          stkCallback: {
-            MerchantRequestID: stk.merchantRequestId,
-            CheckoutRequestID: stk.checkoutRequestId,
-            ResultCode: 1032,
-            ResultDesc: "Request cancelled by user",
-          },
-        },
-      });
-      return;
-    }
-    const transId = simTransId();
-    stk.status = "completed";
-    stk.transId = transId;
-    store.transactions[transId] = {
-      transId,
-      amountCents: stk.amountShillings * 100,
-      msisdn: stk.phone,
-      billRef: stk.accountReference,
-      shortcode: stk.shortcode,
-      time: new Date().toISOString(),
-    };
-    writeSimStore(store);
-    console.log(`Parent paid KES ${stk.amountShillings} from ${stk.phone}: ${transId}`);
-    await callback({
-      Body: {
-        stkCallback: {
-          MerchantRequestID: stk.merchantRequestId,
-          CheckoutRequestID: stk.checkoutRequestId,
-          ResultCode: 0,
-          ResultDesc: "The service request is processed successfully.",
-          CallbackMetadata: {
-            Item: [
-              { Name: "Amount", Value: stk.amountShillings },
-              { Name: "MpesaReceiptNumber", Value: transId },
-              { Name: "TransactionDate", Value: Number(darajaTimestamp()) },
-              { Name: "PhoneNumber", Value: Number(stk.phone) },
-            ],
-          },
-        },
-      },
-    });
+    await finishStk(store, stk, base);
     return;
   }
 
-  console.log("Commands: c2b, fake, repeat, stk, list. See the top of scripts/mpesa-simulate.ts.");
+  console.log(
+    "Commands: c2b, fake, repeat, stk, topup, list. See the top of scripts/mpesa-simulate.ts.",
+  );
   process.exit(2);
 }
 

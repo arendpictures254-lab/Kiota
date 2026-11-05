@@ -7,7 +7,7 @@ import { createOtpService } from "@/lib/auth/otp";
 import { createSession, setSessionSchool } from "@/lib/auth/session";
 import { inContext, platformDb } from "@/lib/db";
 import { normalizePhone } from "@/lib/phone";
-import { sendSms } from "@/lib/sms";
+import { sendPlatformSms } from "@/lib/sms";
 
 export type SignInState = {
   step: "phone" | "code";
@@ -19,7 +19,7 @@ export type SignInState = {
 function otp() {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET is not set");
-  return createOtpService({ db: platformDb, sendSms, secret });
+  return createOtpService({ db: platformDb, sendSms: sendPlatformSms, secret });
 }
 
 export async function signInAction(_prev: SignInState, form: FormData): Promise<SignInState> {

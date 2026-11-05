@@ -46,13 +46,30 @@ const goTo = (req: NextRequest, url: string, status = 308) => {
   return internal(req, "/go-to", { request: { headers } });
 };
 
-export function proxy(req: NextRequest) {
+/** Receipt share links sent to parents by SMS: /r/<16-character token>. */
+const RECEIPT_PAGE = /^\/r\/([^/]+)$/;
+
+/**
+ * Whether a receipt share link exists. Checked here because a page cannot set its status code
+ * once the static shell has been sent, and an unknown link must be a real HTTP 404.
+ */
+async function receiptLink(req: NextRequest, token: string) {
+  if (!/^[A-Z2-9]{16}$/.test(token)) return notFound(req);
+  const { platformDb } = await import("@/lib/db");
+  const [row] = await platformDb.$queryRaw<{ found: boolean }[]>`
+    SELECT app_receipt_public(${token}) IS NOT NULL AS found`;
+  return row?.found ? NextResponse.next() : notFound(req);
+}
+
+export function proxy(req: NextRequest): NextResponse | Promise<NextResponse> {
   const host = (req.headers.get("host") ?? "").toLowerCase();
   const { pathname, search } = req.nextUrl;
   if (pathname === "/go-to") return NextResponse.next();
 
   if (host === APP_HOST) {
     if (hasPrefix(pathname, "/site")) return notFound(req);
+    const receipt = RECEIPT_PAGE.exec(pathname);
+    if (receipt) return receiptLink(req, receipt[1]);
     if (pathname === "/") return goTo(req, `${APP_URL}/dashboard`, 307);
     if (SITE_PAGES.includes(pathname)) {
       return goTo(req, `${SITE_URL}${pathname}${search}`);
@@ -75,6 +92,6 @@ export function proxy(req: NextRequest) {
 export const config = {
   // Static files, metadata images and the health check skip the proxy.
   matcher: [
-    "/((?!_next/|api/health|api/pay/|brand/|favicon\\.ico|icon|apple-icon|opengraph-image|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
+    "/((?!_next/|api/health|api/pay/|api/hooks/|brand/|favicon\\.ico|icon|apple-icon|opengraph-image|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
   ],
 };

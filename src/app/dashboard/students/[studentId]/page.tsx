@@ -29,6 +29,7 @@ import {
   uploadPhotoAction,
 } from "../actions";
 import { StudentsShell, isoDay, kes, loadStudentsActor, showDate } from "../shared";
+import { canSeeMessages } from "@/lib/messaging/service";
 
 export const metadata: Metadata = { title: "Student · Kiota" };
 
@@ -209,6 +210,7 @@ async function Student({ params, searchParams }: Props) {
                 g.receivesAcademics && "Results",
                 g.receivesBoarding && "Boarding alerts",
                 g.authorisedToCollect && "May collect at leave-out",
+                g.whatsapp && "WhatsApp",
               ]
                 .filter(Boolean)
                 .join(" · ") || "Receives no messages"}
@@ -219,6 +221,14 @@ async function Student({ params, searchParams }: Props) {
           <ButtonLink href={`/dashboard/students/${s.id}/guardians/new`} variant="secondary">
             Add a guardian
           </ButtonLink>
+        ) : null}
+        {canSeeMessages(actor.permissions) ? (
+          <Link
+            href={`/dashboard/messages/log?student=${s.id}`}
+            className="text-sm font-semibold text-teal"
+          >
+            Messages sent to these guardians
+          </Link>
         ) : null}
       </section>
 

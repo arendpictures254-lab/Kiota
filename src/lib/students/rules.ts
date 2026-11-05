@@ -83,6 +83,7 @@ export function guardianDefaults(relationship: RelationshipValue) {
     receivesAcademics: !sponsor,
     receivesBoarding: !sponsor,
     authorisedToCollect: relationship === "mother" || relationship === "father",
+    whatsapp: false,
   };
 }
 

@@ -200,6 +200,8 @@ export type GuardianInput = {
   receivesAcademics: boolean;
   receivesBoarding: boolean;
   authorisedToCollect: boolean;
+  /** This phone uses WhatsApp (messages may go there, with SMS as the fallback). */
+  whatsapp?: boolean;
 };
 
 /** `prefix` lets one form hold several guardians (g1_name, g2_name...). */
@@ -234,6 +236,7 @@ export function parseGuardianInput(raw: Record<string, unknown>, prefix = ""): G
     receivesAcademics: flag("receivesAcademics"),
     receivesBoarding: flag("receivesBoarding"),
     authorisedToCollect: flag("authorisedToCollect"),
+    whatsapp: flag("whatsapp"),
   };
 }
 
@@ -299,6 +302,9 @@ export async function linkGuardian(tx: Tx, studentId: string, g: GuardianInput) 
     SELECT * FROM app_upsert_guardian_link(
       ${studentId}::uuid, ${g.phone}, ${g.name}, ${g.relationship}, ${g.language},
       ${g.receivesFees}, ${g.receivesAcademics}, ${g.receivesBoarding}, ${g.authorisedToCollect})`;
+  if (g.whatsapp !== undefined) {
+    await tx.guardianLink.update({ where: { id: row.link_id }, data: { whatsapp: g.whatsapp } });
+  }
   return { linkId: row.link_id, created: row.created };
 }
 
@@ -570,6 +576,7 @@ export async function updateGuardian(
         receivesAcademics: before.receivesAcademics,
         receivesBoarding: before.receivesBoarding,
         authorisedToCollect: before.authorisedToCollect,
+        whatsapp: before.whatsapp,
       },
       after: g,
       ip: actor.ip,

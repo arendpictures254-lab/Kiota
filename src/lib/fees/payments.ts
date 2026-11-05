@@ -7,6 +7,7 @@ import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
 import { assertCan } from "@/lib/auth/permissions";
 import { withContext, type Tx } from "@/lib/db-core";
+import { queuePaymentMessages } from "@/lib/messaging/service";
 import { normalizePhone } from "@/lib/phone";
 import { type Actor, type Deps, ValidationError, clean, ctxOf } from "@/lib/service-kit";
 import { parseKesToCents } from "@/lib/students/rules";
@@ -140,6 +141,15 @@ export async function postPayment(tx: Tx, actor: Actor, input: PostPaymentInput)
       allocation: lines,
     },
     ip: actor.ip,
+  });
+
+  // Tell the fee contacts: SMS with the new balance and receipt link (sent in the background).
+  await queuePaymentMessages(tx, actor, {
+    studentId: input.studentId,
+    amountCents: input.amountCents,
+    balanceAfterCents: receipt.balanceAfterCents,
+    receiptNumber: number,
+    shareToken: receipt.shareToken,
   });
   return { payment, receipt };
 }

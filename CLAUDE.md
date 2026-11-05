@@ -60,7 +60,12 @@ src/lib/fees/                 Fees: allocation.ts (pure ledger maths), ledger.ts
                               receipts.ts + pdf.ts (receipts and statements)
 src/lib/mpesa/                Daraja interface (daraja.ts), simulator, service.ts (callbacks, STK)
 src/app/api/pay/[token]/      Public Daraja callback routes (secret token in the URL)
-src/app/r/[token]/            Public receipt share link
+src/app/r/[token]/            Public receipt share link (unknown links: 404 from src/proxy.ts)
+src/lib/messaging/            Messaging: units.ts (SMS units), templates, outbox (plan, reserve,
+                              queue), service.ts (payments, reminders, notices, log), worker.ts
+                              (sending, delivery reports, refunds), wallet.ts (top-ups, admin)
+src/lib/whatsapp/             WhatsApp Cloud API driver (console in development)
+src/app/api/hooks/            SMS and WhatsApp delivery report webhooks
 assets/fonts/                 Brand fonts used in PDFs (OFL licensed)
 src/app/globals.css           Tailwind import and Kiota design tokens
 src/components/               Shared UI (ui.tsx: Button, Field, Card, Shell...)
@@ -74,7 +79,7 @@ src/lib/import/               Excel import: columns, template/reader, validate (
 src/lib/storage/              File storage interface (local disk driver; S3 later)
 src/lib/service-kit.ts        Actor, ValidationError and parsing helpers shared by services
 src/lib/actions.ts            Helpers for server actions (FormState, attempt, currentActor)
-src/lib/sms/                  sendSms() interface and drivers (console for development)
+src/lib/sms/                  sendSms() / sendPlatformSms() and drivers (console, Africa's Talking)
 src/lib/audit.ts              audit(tx, entry): append to the audit log in the same transaction
 src/generated/prisma/         Generated Prisma client (gitignored, `npm run db:generate`)
 tests/                        Database test setup and helpers
@@ -86,6 +91,8 @@ scripts/deploy-setup.ts       Runs on each deploy as owner: catalogue sync, kiot
 scripts/create-admin.ts       Creates an Arend admin (docs/deploy.md)
 Dockerfile, docker-compose.prod.yml, deploy/   Single-server production setup (docs/deploy.md)
 docs/launch-checklist.md      Everything that must happen before launch. Add to it.
+docs/messaging.md             Messaging, and what Africa's Talking, Meta and Safaricom must provide
+scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
 ```
@@ -134,6 +141,11 @@ Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL ar
   once (unique transaction ID), confirm with Daraja before posting, and run as the school's hidden
   "Automatic payments" member (role `system_payments`). Credentials are encrypted with
   `CREDENTIALS_ENCRYPTION_KEY` (src/lib/crypto.ts). Test with `npm run mpesa:simulate`.
+- **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost
+  is reserved in the append-only `wallet_entries` when queued, kept on delivery, refunded on
+  failure. Sign-in codes and Kiota's own alerts use `sendPlatformSms()` (Kiota's sender ID, never
+  a school's wallet). Bulk sends need a cost preview and refuse a changed cost. Test with
+  `npm run sms:simulate` and `npm run mpesa:simulate -- topup` (docs/messaging.md).
 - Bulk work (imports) uses set-based SQL (createMany, `jsonb_to_recordset`, in-database loops),
   not one round trip per row.
 - Guardians are platform users found by phone (`app_upsert_guardian_link`). A school stores its
@@ -196,6 +208,8 @@ npm run db:generate    # regenerate the Prisma client (Prisma 7 does not do it o
 npm run db:studio      # browse the database
 npm run samples        # rebuild docs/samples/*.xlsx after changing import columns
 npm run mpesa:simulate -- c2b --account BA/2025/001 --amount 5000   # fake M-Pesa (docs/mpesa.md)
+npm run mpesa:simulate -- topup                                      # complete a wallet top-up
+npm run sms:simulate                                                 # fake SMS delivery reports
 ```
 
 Checks (run before every commit; Postgres must be running):

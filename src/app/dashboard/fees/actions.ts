@@ -6,7 +6,11 @@ import { type FormState, attempt, currentActor, deps, formObject } from "@/lib/a
 import { withContext } from "@/lib/db-core";
 import * as invoicing from "@/lib/fees/invoicing";
 import { parseManualPayment, recordManualPayment, reversePayment } from "@/lib/fees/payments";
-import { addPledge, cancelPledge, queueFeeReminders } from "@/lib/fees/reports";
+import { addPledge, cancelPledge } from "@/lib/fees/reports";
+import { type SendState, toPreviewView } from "@/lib/messaging/preview-view";
+import { sendStep } from "@/lib/messaging/send-step";
+import { previewFeeReminders, sendFeeReminders } from "@/lib/messaging/service";
+import { kickMessageWorker } from "@/lib/messaging/worker-loop";
 import * as setup from "@/lib/fees/setup";
 import * as mpesa from "@/lib/mpesa/service";
 import { ValidationError, clean, ctxOf } from "@/lib/service-kit";
@@ -47,6 +51,7 @@ export async function recordPaymentAction(_s: FormState, form: FormData): Promis
   });
   if (r.error) return r;
   done();
+  kickMessageWorker();
   redirect(`/dashboard/fees/receipts/${receiptId}?new=1`);
 }
 
@@ -249,6 +254,7 @@ export async function assignSuspenseAction(_s: FormState, form: FormData): Promi
   });
   if (r.error) return r;
   done();
+  kickMessageWorker();
   redirect(`/dashboard/fees/receipts/${receiptId}?new=1`);
 }
 
@@ -265,17 +271,28 @@ export async function retryVerificationAction(_s: FormState, form: FormData): Pr
 
 // ---- Reports and pledges ----
 
-export async function sendRemindersAction(_s: FormState, form: FormData): Promise<FormState> {
+export async function sendRemindersAction(_s: SendState, form: FormData): Promise<SendState> {
   const ids = form.getAll("studentId").map(String);
-  let n = 0;
-  const r = await attempt(async () => {
-    n = (await queueFeeReminders(deps, await currentActor(), ids)).queued;
-  });
-  return r.error
-    ? r
-    : {
-        ok: `${n} reminder${n === 1 ? "" : "s"} queued. (Sending by SMS/WhatsApp is the next step to build.)`,
+  return sendStep(async () => {
+    const actor = await currentActor();
+    if (form.get("step") === "send") {
+      const r = await sendFeeReminders(deps, actor, ids, Number(form.get("expectedCost") ?? NaN));
+      kickMessageWorker();
+      revalidatePath("/dashboard/messages", "layout");
+      return {
+        ok: `Sending reminders to ${r.recipients} parent${r.recipients === 1 ? "" : "s"} of ${r.students} student${r.students === 1 ? "" : "s"}.`,
       };
+    }
+    const p = await previewFeeReminders(deps, actor, ids);
+    return {
+      preview: toPreviewView(
+        p,
+        p.noContact
+          ? `${p.noContact} student${p.noContact === 1 ? " has" : "s have"} no fee contact and will not get a reminder.`
+          : null,
+      ),
+    };
+  });
 }
 
 export async function addPledgeAction(_s: FormState, form: FormData): Promise<FormState> {

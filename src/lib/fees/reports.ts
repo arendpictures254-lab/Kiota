@@ -236,25 +236,6 @@ export async function defaulters(
   });
 }
 
-/** "Send reminder": a stub until SMS/WhatsApp sending arrives. Records who asked, for whom. */
-export async function queueFeeReminders({ db }: Deps, actor: Actor, studentIds: string[]) {
-  assertCan(actor.permissions, "fees.reports");
-  if (studentIds.length === 0) throw new ValidationError("Choose at least one student.");
-  return withContext(db, ctxOf(actor), async (tx) => {
-    const found = await tx.student.count({ where: { id: { in: studentIds } } });
-    await audit(tx, {
-      schoolId: actor.schoolId,
-      actorId: actor.userId,
-      action: "fees.reminder.queued",
-      targetType: "students",
-      targetId: String(found),
-      after: { studentIds, channel: "stub: SMS/WhatsApp sending comes next" },
-      ip: actor.ip,
-    });
-    return { queued: found };
-  });
-}
-
 /** Payments received on one day (Nairobi time), with reversals made that day. */
 export async function dailyCollection({ db }: Deps, actor: Actor, rawDate: string) {
   assertCan(actor.permissions, "fees.reports");

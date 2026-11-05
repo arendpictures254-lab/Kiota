@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { clientIp, requireSchool, type SchoolContext } from "@/lib/auth/context";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { platformDb } from "@/lib/db";
-import { sendSms } from "@/lib/sms";
+import { sendPlatformSms } from "@/lib/sms";
 import {
   type Actor,
   ValidationError,
@@ -44,7 +44,7 @@ export async function inviteStaffAction(_prev: FormState, form: FormData): Promi
       return { error: "This person is already on your staff list.", field: "phone" };
     }
     membershipId = result.membershipId;
-    await sendSms({
+    await sendPlatformSms({
       to: result.phone,
       text: `${ctx.school.name} has added you to Kiota. Sign in at kiota.app with this phone number.`,
     });

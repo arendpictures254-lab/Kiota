@@ -22,6 +22,16 @@ export const E2E_ENV = {
   SITE_URL: `http://localhost:${PORT}`,
   APP_URL: `http://app.localhost:${PORT}`,
   ALLOW_CONSOLE_SMS: "1",
+  // A production build printing SMS to the console is only allowed on a demo server.
+  KIOTA_DEMO: "1",
+  // Messages go out at any hour of a test run, and delivery reports come from sms:simulate.
+  QUIET_HOURS: "off",
+  SMS_CALLBACK_TOKEN: "e2e-sms-callback-token-0123456789",
+  WHATSAPP_DRIVER: "off",
+  // Wallet top-ups go to a simulated Arend Studio Paybill.
+  PLATFORM_MPESA_ENVIRONMENT: "simulator",
+  PLATFORM_MPESA_SHORTCODE: "600999",
+  PLATFORM_MPESA_CALLBACK_TOKEN: "e2e-platform-topup-token-0123456789",
   // Several tests sign in as the same seeded people.
   OTP_MAX_PER_WINDOW: "50",
   // M-Pesa runs against the local simulator (scripts/mpesa-simulate.ts) with its own store.

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { clientIp, requireUser } from "@/lib/auth/context";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { platformDb } from "@/lib/db";
-import { sendSms } from "@/lib/sms";
+import { sendPlatformSms } from "@/lib/sms";
 import { ValidationError, createSchool } from "@/lib/staff/service";
 
 export type CreateSchoolState = { error?: string; field?: string };
@@ -29,7 +29,7 @@ export async function createSchoolAction(
         directorPhone: String(form.get("directorPhone") ?? ""),
       },
     );
-    await sendSms({
+    await sendPlatformSms({
       to: directorPhone,
       text: `Welcome to Kiota. ${name.trim()} is ready for you as Director. Sign in at kiota.app with this phone number.`,
     });

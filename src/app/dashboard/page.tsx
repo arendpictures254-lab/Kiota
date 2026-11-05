@@ -4,6 +4,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { Button, ButtonLink, Card, Loading, Shell } from "@/components/ui";
 import { listMySchools, requireSchool } from "@/lib/auth/context";
 import { db } from "@/lib/db";
+import { canSeeMessages } from "@/lib/messaging/service";
 import { markNotificationReadAction } from "./fees/actions";
 import { supportAccessAction } from "./actions";
 
@@ -77,6 +78,11 @@ async function Dashboard() {
           Fees
         </ButtonLink>
       ) : null}
+      {canSeeMessages(ctx.permissions) ? (
+        <ButtonLink href="/dashboard/messages" variant="secondary">
+          Messages
+        </ButtonLink>
+      ) : null}
       {can("staff.view") ? (
         <ButtonLink href="/dashboard/staff" variant="secondary">
           Staff
@@ -87,7 +93,11 @@ async function Dashboard() {
           School setup
         </ButtonLink>
       ) : null}
-      {!can("students.view") && !can("students.view.own_streams") && !can("staff.view") && !fees ? (
+      {!can("students.view") &&
+      !can("students.view.own_streams") &&
+      !can("staff.view") &&
+      !fees &&
+      !canSeeMessages(ctx.permissions) ? (
         <Card>
           <p className="text-ink/70">Your tools will appear here as Kiota grows.</p>
         </Card>
