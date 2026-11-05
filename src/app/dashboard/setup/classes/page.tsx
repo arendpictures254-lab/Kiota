@@ -26,7 +26,11 @@ async function Classes() {
   const classes = enabledClasses(structure);
   const staff = await withContext(deps.db, ctxOf(actor), (tx) =>
     tx.membership.findMany({
-      where: { status: "active", roles: { none: { role: { key: "system_payments" } } } },
+      where: {
+        schoolId: actor.schoolId,
+        status: "active",
+        roles: { none: { role: { key: "system_payments" } } },
+      },
     }),
   );
   const staffOptions = staff

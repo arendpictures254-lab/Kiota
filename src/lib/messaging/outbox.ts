@@ -26,7 +26,7 @@ import {
   whatsappParams,
   whatsappReady,
 } from "./templates";
-import { countSms } from "./units";
+import { countSms, toPlainSms } from "./units";
 import { ensureMessagingMember } from "./system";
 
 export type Category = "fees" | "academics" | "boarding" | "general";
@@ -103,7 +103,8 @@ export function planMessage(
     }
     if (!fallback) return null;
   }
-  const body = renderTemplate(t.smsBody, d.vars);
+  // Sent as plain GSM-7 (sendSms does the same), so units and cost are counted on what goes out.
+  const body = toPlainSms(renderTemplate(t.smsBody, d.vars));
   const units = countSms(body).units;
   return {
     ...base,

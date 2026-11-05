@@ -76,6 +76,7 @@ export async function getStructure({ db }: Deps, actor: Actor) {
   return withContext(db, ctxOf(actor), async (tx) => {
     const [levels, houses, dormitories, years] = await Promise.all([
       tx.level.findMany({
+        where: { schoolId: actor.schoolId },
         orderBy: { sortOrder: "asc" },
         include: {
           classes: {
@@ -91,9 +92,10 @@ export async function getStructure({ db }: Deps, actor: Actor) {
           pathways: { orderBy: { name: "asc" } },
         },
       }),
-      tx.house.findMany({ orderBy: { name: "asc" } }),
-      tx.dormitory.findMany({ orderBy: { name: "asc" } }),
+      tx.house.findMany({ where: { schoolId: actor.schoolId }, orderBy: { name: "asc" } }),
+      tx.dormitory.findMany({ where: { schoolId: actor.schoolId }, orderBy: { name: "asc" } }),
       tx.academicYear.findMany({
+        where: { schoolId: actor.schoolId },
         orderBy: { startDate: "desc" },
         include: { terms: { orderBy: { startDate: "asc" } } },
       }),
@@ -122,11 +124,11 @@ export async function setLevelEnabled(deps: Deps, actor: Actor, levelId: string,
     actor,
     enabled ? "structure.level.enable" : "structure.level.disable",
     async (tx) => {
-      const level = await tx.level.findUnique({ where: { id: levelId } });
+      const level = await tx.level.findUnique({ where: { schoolId: actor.schoolId, id: levelId } });
       if (!level) throw new ValidationError("Level not found.");
       if (!enabled) {
         const inUse = await tx.student.count({
-          where: { class: { levelId }, status: "active" },
+          where: { schoolId: actor.schoolId, class: { levelId }, status: "active" },
         });
         if (inUse > 0) {
           throw new ValidationError(
@@ -134,10 +136,16 @@ export async function setLevelEnabled(deps: Deps, actor: Actor, levelId: string,
           );
         }
       }
-      await tx.level.update({ where: { id: levelId }, data: { enabled } });
+      await tx.level.update({
+        where: { schoolId: actor.schoolId, id: levelId },
+        data: { enabled },
+      });
       if (enabled) {
         const template = await tx.levelTemplate.findUnique({ where: { key: level.key } });
-        if (template && (await tx.subject.count({ where: { levelId } })) === 0) {
+        if (
+          template &&
+          (await tx.subject.count({ where: { schoolId: actor.schoolId, levelId } })) === 0
+        ) {
           await tx.subject.createMany({
             data: template.subjects.map((name) => ({ schoolId: actor.schoolId, levelId, name })),
             skipDuplicates: true,
@@ -166,7 +174,10 @@ export async function setLevelEnabled(deps: Deps, actor: Actor, levelId: string,
 export async function addStream(deps: Deps, actor: Actor, classId: string, rawName: unknown) {
   const name = requireName(rawName, "stream name");
   return run(deps, actor, "structure.stream.add", async (tx) => {
-    const cls = await tx.class.findUnique({ where: { id: classId }, include: { level: true } });
+    const cls = await tx.class.findUnique({
+      where: { schoolId: actor.schoolId, id: classId },
+      include: { level: true },
+    });
     if (!cls) throw new ValidationError("Choose a class.", "classId");
     if (!cls.level.enabled)
       throw new ValidationError(`${cls.level.name} is switched off.`, "classId");
@@ -185,17 +196,17 @@ export async function addStream(deps: Deps, actor: Actor, classId: string, rawNa
 export async function removeStream(deps: Deps, actor: Actor, streamId: string) {
   return run(deps, actor, "structure.stream.remove", async (tx) => {
     const stream = await tx.stream.findUnique({
-      where: { id: streamId },
+      where: { schoolId: actor.schoolId, id: streamId },
       include: { class: true },
     });
     if (!stream) throw new ValidationError("Stream not found.");
-    const students = await tx.student.count({ where: { streamId } });
+    const students = await tx.student.count({ where: { schoolId: actor.schoolId, streamId } });
     if (students > 0) {
       throw new ValidationError(
         `${stream.class.name} ${stream.name} has students, so it cannot be removed.`,
       );
     }
-    await tx.stream.delete({ where: { id: streamId } });
+    await tx.stream.delete({ where: { schoolId: actor.schoolId, id: streamId } });
     return {
       result: undefined,
       targetType: "stream",
@@ -213,14 +224,18 @@ export async function setClassTeacher(
   membershipId: string | null,
 ) {
   return run(deps, actor, "structure.stream.class_teacher", async (tx) => {
-    const stream = await tx.stream.findUnique({ where: { id: streamId } });
+    const stream = await tx.stream.findUnique({
+      where: { schoolId: actor.schoolId, id: streamId },
+    });
     if (!stream) throw new ValidationError("Stream not found.");
     if (membershipId) {
-      const m = await tx.membership.findUnique({ where: { id: membershipId } });
+      const m = await tx.membership.findUnique({
+        where: { schoolId: actor.schoolId, id: membershipId },
+      });
       if (!m || m.status !== "active") throw new ValidationError("Choose a staff member.");
     }
     await tx.stream.update({
-      where: { id: streamId },
+      where: { schoolId: actor.schoolId, id: streamId },
       data: { classTeacherMembershipId: membershipId },
     });
     return {
@@ -249,12 +264,12 @@ export async function addHouse(deps: Deps, actor: Actor, rawName: unknown) {
 
 export async function removeHouse(deps: Deps, actor: Actor, houseId: string) {
   return run(deps, actor, "structure.house.remove", async (tx) => {
-    const house = await tx.house.findUnique({ where: { id: houseId } });
+    const house = await tx.house.findUnique({ where: { schoolId: actor.schoolId, id: houseId } });
     if (!house) throw new ValidationError("House not found.");
-    if ((await tx.student.count({ where: { houseId } })) > 0) {
+    if ((await tx.student.count({ where: { schoolId: actor.schoolId, houseId } })) > 0) {
       throw new ValidationError(`${house.name} has students, so it cannot be removed.`);
     }
-    await tx.house.delete({ where: { id: houseId } });
+    await tx.house.delete({ where: { schoolId: actor.schoolId, id: houseId } });
     return {
       result: undefined,
       targetType: "house",
@@ -290,9 +305,11 @@ export async function addDormitory(
 
 export async function removeDormitory(deps: Deps, actor: Actor, dormitoryId: string) {
   return run(deps, actor, "structure.dormitory.remove", async (tx) => {
-    const dorm = await tx.dormitory.findUnique({ where: { id: dormitoryId } });
+    const dorm = await tx.dormitory.findUnique({
+      where: { schoolId: actor.schoolId, id: dormitoryId },
+    });
     if (!dorm) throw new ValidationError("Dormitory not found.");
-    await tx.dormitory.delete({ where: { id: dormitoryId } });
+    await tx.dormitory.delete({ where: { schoolId: actor.schoolId, id: dormitoryId } });
     return {
       result: undefined,
       targetType: "dormitory",
@@ -380,7 +397,7 @@ export async function addTerm(deps: Deps, actor: Actor, input: TermInput) {
   };
   return run(deps, actor, "structure.term.add", async (tx) => {
     const year = await tx.academicYear.findUnique({
-      where: { id: input.academicYearId },
+      where: { schoolId: actor.schoolId, id: input.academicYearId },
       include: { terms: true },
     });
     if (!year) throw new ValidationError("Choose an academic year.", "academicYearId");
@@ -421,9 +438,9 @@ export async function addTerm(deps: Deps, actor: Actor, input: TermInput) {
 
 export async function removeTerm(deps: Deps, actor: Actor, termId: string) {
   return run(deps, actor, "structure.term.remove", async (tx) => {
-    const term = await tx.term.findUnique({ where: { id: termId } });
+    const term = await tx.term.findUnique({ where: { schoolId: actor.schoolId, id: termId } });
     if (!term) throw new ValidationError("Term not found.");
-    await tx.term.delete({ where: { id: termId } });
+    await tx.term.delete({ where: { schoolId: actor.schoolId, id: termId } });
     return { result: undefined, targetType: "term", targetId: termId, before: { name: term.name } };
   });
 }
@@ -440,7 +457,9 @@ export async function addSubject(
   const name = requireName(input.name, "subject name");
   const code = clean(input.code);
   return run(deps, actor, "structure.subject.add", async (tx) => {
-    const level = await tx.level.findUnique({ where: { id: input.levelId } });
+    const level = await tx.level.findUnique({
+      where: { schoolId: actor.schoolId, id: input.levelId },
+    });
     if (!level) throw new ValidationError("Choose a level.", "levelId");
     const subject = await friendly("subject", () =>
       tx.subject.create({ data: { schoolId: actor.schoolId, levelId: level.id, name, code } }),
@@ -456,12 +475,14 @@ export async function addSubject(
 
 export async function removeSubject(deps: Deps, actor: Actor, subjectId: string) {
   return run(deps, actor, "structure.subject.remove", async (tx) => {
-    const subject = await tx.subject.findUnique({ where: { id: subjectId } });
+    const subject = await tx.subject.findUnique({
+      where: { schoolId: actor.schoolId, id: subjectId },
+    });
     if (!subject) throw new ValidationError("Subject not found.");
-    if ((await tx.studentSubject.count({ where: { subjectId } })) > 0) {
+    if ((await tx.studentSubject.count({ where: { schoolId: actor.schoolId, subjectId } })) > 0) {
       throw new ValidationError(`Students take ${subject.name}, so it cannot be removed.`);
     }
-    await tx.subject.delete({ where: { id: subjectId } });
+    await tx.subject.delete({ where: { schoolId: actor.schoolId, id: subjectId } });
     return {
       result: undefined,
       targetType: "subject",
@@ -478,7 +499,9 @@ export async function addPathway(
 ) {
   const name = requireName(input.name, "pathway name");
   return run(deps, actor, "structure.pathway.add", async (tx) => {
-    const level = await tx.level.findUnique({ where: { id: input.levelId } });
+    const level = await tx.level.findUnique({
+      where: { schoolId: actor.schoolId, id: input.levelId },
+    });
     if (!level) throw new ValidationError("Choose a level.", "levelId");
     const pathway = await friendly("pathway", () =>
       tx.pathway.create({ data: { schoolId: actor.schoolId, levelId: level.id, name } }),
@@ -494,12 +517,14 @@ export async function addPathway(
 
 export async function removePathway(deps: Deps, actor: Actor, pathwayId: string) {
   return run(deps, actor, "structure.pathway.remove", async (tx) => {
-    const pathway = await tx.pathway.findUnique({ where: { id: pathwayId } });
+    const pathway = await tx.pathway.findUnique({
+      where: { schoolId: actor.schoolId, id: pathwayId },
+    });
     if (!pathway) throw new ValidationError("Pathway not found.");
-    if ((await tx.student.count({ where: { pathwayId } })) > 0) {
+    if ((await tx.student.count({ where: { schoolId: actor.schoolId, pathwayId } })) > 0) {
       throw new ValidationError(`Students follow ${pathway.name}, so it cannot be removed.`);
     }
-    await tx.pathway.delete({ where: { id: pathwayId } });
+    await tx.pathway.delete({ where: { schoolId: actor.schoolId, id: pathwayId } });
     return {
       result: undefined,
       targetType: "pathway",

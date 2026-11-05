@@ -72,7 +72,9 @@ export async function postPayment(tx: Tx, actor: Actor, input: PostPaymentInput)
   if (input.amountCents > MAX_PAYMENT_CENTS) {
     throw new ValidationError("That amount is too large for one payment.", "amount");
   }
-  const student = await tx.student.findUnique({ where: { id: input.studentId } });
+  const student = await tx.student.findUnique({
+    where: { schoolId: actor.schoolId, id: input.studentId },
+  });
   if (!student) throw new ValidationError("Choose a student.", "studentId");
 
   let payment;
@@ -101,8 +103,8 @@ export async function postPayment(tx: Tx, actor: Actor, input: PostPaymentInput)
     throw err;
   }
 
-  const heads = await voteHeadRefs(tx);
-  const before = await studentPosition(tx, input.studentId);
+  const heads = await voteHeadRefs(tx, actor.schoolId);
+  const before = await studentPosition(tx, actor.schoolId, input.studentId);
   const lines = allocatePayment(input.amountCents, before, heads);
   await postEntry(tx, {
     schoolId: actor.schoolId,
@@ -233,14 +235,14 @@ export async function reversePayment(
   }
   return withContext(db, ctxOf(actor), async (tx) => {
     const payment = await tx.payment.findUnique({
-      where: { id: paymentId },
+      where: { schoolId: actor.schoolId, id: paymentId },
       include: { receipt: true, reversal: true },
     });
     if (!payment) throw new ValidationError("Payment not found.");
     if (payment.reversal) throw new ValidationError("This payment has already been reversed.");
 
     const original = await tx.ledgerEntry.findFirst({
-      where: { paymentId, type: "payment" },
+      where: { schoolId: actor.schoolId, paymentId, type: "payment" },
       include: { lines: true },
     });
     if (!original) throw new ValidationError("This payment has no ledger entry.");
@@ -277,12 +279,19 @@ export async function reversePayment(
 
     // Tell every Director, in the app.
     const [student, directors, reverser] = await Promise.all([
-      tx.student.findUniqueOrThrow({ where: { id: payment.studentId } }),
+      tx.student.findUniqueOrThrow({ where: { schoolId: actor.schoolId, id: payment.studentId } }),
       tx.membership.findMany({
-        where: { status: "active", roles: { some: { role: { key: "director" } } } },
+        where: {
+          schoolId: actor.schoolId,
+          status: "active",
+          roles: { some: { role: { key: "director" } } },
+        },
         select: { id: true },
       }),
-      tx.membership.findFirst({ where: { userId: actor.userId }, select: { displayName: true } }),
+      tx.membership.findFirst({
+        where: { schoolId: actor.schoolId, userId: actor.userId },
+        select: { displayName: true },
+      }),
     ]);
     if (directors.length) {
       await tx.notification.createMany({

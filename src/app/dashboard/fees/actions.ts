@@ -318,7 +318,7 @@ export async function markNotificationReadAction(form: FormData): Promise<void> 
   const actor = await currentActor();
   await withContext(deps.db, ctxOf(actor), (tx) =>
     tx.notification.updateMany({
-      where: { id: String(form.get("id") ?? ""), readAt: null },
+      where: { schoolId: actor.schoolId, id: String(form.get("id") ?? ""), readAt: null },
       data: { readAt: new Date() },
     }),
   );

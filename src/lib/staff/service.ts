@@ -26,17 +26,17 @@ async function roleIdsFor(tx: Tx, roleKeys: readonly string[]) {
   return roles;
 }
 
-async function rolesOf(tx: Tx, membershipId: string) {
+async function rolesOf(tx: Tx, schoolId: string, membershipId: string) {
   const rows = await tx.membershipRole.findMany({
-    where: { membershipId },
+    where: { schoolId, membershipId },
     include: { role: true },
   });
   return rows.map((r) => r.role.key ?? r.role.id).sort();
 }
 
-async function activeDirectorCount(tx: Tx) {
+async function activeDirectorCount(tx: Tx, schoolId: string) {
   return tx.membershipRole.count({
-    where: { role: { key: "director" }, membership: { status: "active" } },
+    where: { schoolId, role: { key: "director" }, membership: { status: "active" } },
   });
 }
 
@@ -56,7 +56,11 @@ export async function listStaff({ db }: Deps, actor: Actor): Promise<StaffRow[]>
   return withContext(db, ctxOf(actor), async (tx) => {
     const members = await tx.membership.findMany({
       // Kiota's own automatic-payments member is not staff.
-      where: { status: "active", roles: { none: { role: { key: { in: SYSTEM_ROLES } } } } },
+      where: {
+        schoolId: actor.schoolId,
+        status: "active",
+        roles: { none: { role: { key: { in: SYSTEM_ROLES } } } },
+      },
       include: {
         // Only the phone: schools never read the platform name (memberships.display_name instead).
         user: { select: { phone: true } },
@@ -115,14 +119,16 @@ export async function inviteStaff(
     }
     const membership = existing
       ? await tx.membership.update({
-          where: { id: existing.id },
+          where: { schoolId: actor.schoolId, id: existing.id },
           data: { status: "active", displayName: name },
         })
       : await tx.membership.create({
           data: { schoolId: actor.schoolId, userId, displayName: name },
         });
 
-    await tx.membershipRole.deleteMany({ where: { membershipId: membership.id } });
+    await tx.membershipRole.deleteMany({
+      where: { schoolId: actor.schoolId, membershipId: membership.id },
+    });
     await tx.membershipRole.createMany({
       data: roles.map((r) => ({
         schoolId: actor.schoolId,
@@ -152,23 +158,25 @@ export async function setStaffRoles(
 ): Promise<void> {
   assertCan(actor.permissions, "staff.manage");
   await withContext(db, ctxOf(actor), async (tx) => {
-    const membership = await tx.membership.findUnique({ where: { id: membershipId } });
+    const membership = await tx.membership.findUnique({
+      where: { schoolId: actor.schoolId, id: membershipId },
+    });
     if (!membership || membership.status !== "active") {
       throw new ValidationError("Staff member not found.");
     }
     const roles = await roleIdsFor(tx, roleKeys);
-    const before = await rolesOf(tx, membershipId);
+    const before = await rolesOf(tx, actor.schoolId, membershipId);
 
-    await tx.membershipRole.deleteMany({ where: { membershipId } });
+    await tx.membershipRole.deleteMany({ where: { schoolId: actor.schoolId, membershipId } });
     await tx.membershipRole.createMany({
       data: roles.map((r) => ({ schoolId: actor.schoolId, membershipId, roleId: r.id })),
     });
 
-    if ((await activeDirectorCount(tx)) === 0) {
+    if ((await activeDirectorCount(tx, actor.schoolId)) === 0) {
       throw new ValidationError("A school must always have at least one Director.", "roles");
     }
 
-    const after = await rolesOf(tx, membershipId);
+    const after = await rolesOf(tx, actor.schoolId, membershipId);
     await audit(tx, {
       schoolId: actor.schoolId,
       actorId: actor.userId,
@@ -196,12 +204,16 @@ export async function setLeaveoutApproval(
   if (!DIRECTOR_GRANT_ONLY.includes(LEAVEOUT_APPROVE)) throw new Error("catalogue mismatch");
 
   await withContext(db, ctxOf(actor), async (tx) => {
-    const membership = await tx.membership.findUnique({ where: { id: membershipId } });
+    const membership = await tx.membership.findUnique({
+      where: { schoolId: actor.schoolId, id: membershipId },
+    });
     if (!membership || membership.status !== "active") {
       throw new ValidationError("Staff member not found.");
     }
     const key = { membershipId_permissionKey: { membershipId, permissionKey: LEAVEOUT_APPROVE } };
-    const existing = await tx.permissionGrant.findUnique({ where: key });
+    const existing = await tx.permissionGrant.findUnique({
+      where: { ...key, schoolId: actor.schoolId },
+    });
     if (allow === !!existing) return; // nothing to change
 
     if (allow) {
@@ -214,7 +226,7 @@ export async function setLeaveoutApproval(
         },
       });
     } else {
-      await tx.permissionGrant.delete({ where: key });
+      await tx.permissionGrant.delete({ where: { ...key, schoolId: actor.schoolId } });
     }
 
     await audit(tx, {

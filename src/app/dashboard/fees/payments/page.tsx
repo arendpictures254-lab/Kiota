@@ -32,6 +32,7 @@ async function Payments({
     const students = q
       ? await tx.student.findMany({
           where: {
+            schoolId: actor.schoolId,
             OR: [
               { admissionNumber: { contains: q, mode: "insensitive" } },
               { firstName: { contains: q, mode: "insensitive" } },
@@ -45,19 +46,20 @@ async function Payments({
     const payments = await tx.payment.findMany({
       where: q
         ? {
+            schoolId: actor.schoolId,
             OR: [
               { reference: { contains: q, mode: "insensitive" } },
               { studentId: { in: students.map((s) => s.id) } },
               ...(n ? [{ receipt: { number: n } }] : []),
             ],
           }
-        : {},
+        : { schoolId: actor.schoolId },
       include: { receipt: true, reversal: true },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
     const names = await tx.student.findMany({
-      where: { id: { in: payments.map((p) => p.studentId) } },
+      where: { schoolId: actor.schoolId, id: { in: payments.map((p) => p.studentId) } },
       select: { id: true, firstName: true, lastName: true, admissionNumber: true },
     });
     return payments.map((p) => ({ ...p, student: names.find((s) => s.id === p.studentId) }));

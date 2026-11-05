@@ -4,7 +4,14 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { scopedDb, withContext } from "@/lib/db-core";
-import { app, makeAdmin, makeMember, makeSchool, owner } from "../../tests/db-helpers";
+import {
+  app,
+  appUnguarded,
+  makeAdmin,
+  makeMember,
+  makeSchool,
+  owner,
+} from "../../tests/db-helpers";
 
 let schoolA: { id: string };
 let schoolB: { id: string };
@@ -82,13 +89,13 @@ describe("the app database role", () => {
 
 describe("a user in School A", () => {
   it("can read their own school's rows", async () => {
-    const memberships = await scopedDb(app, ctxA()).membership.findMany();
+    const memberships = await scopedDb(appUnguarded, ctxA()).membership.findMany();
     expect(memberships.length).toBeGreaterThan(0);
     expect(memberships.every((m) => m.schoolId === schoolA.id)).toBe(true);
   });
 
   it("cannot read School B's rows, even when asking for them by id", async () => {
-    const db = scopedDb(app, ctxA());
+    const db = scopedDb(appUnguarded, ctxA());
     expect(await db.membership.findMany({ where: { schoolId: schoolB.id } })).toEqual([]);
     expect(await db.membership.findUnique({ where: { id: memberB.id } })).toBeNull();
     expect(await db.school.findUnique({ where: { id: schoolB.id } })).toBeNull();
@@ -97,7 +104,7 @@ describe("a user in School A", () => {
   });
 
   it("cannot read School B's rows through a raw query", async () => {
-    const db = scopedDb(app, ctxA());
+    const db = scopedDb(appUnguarded, ctxA());
     const rows = await db.$queryRaw<{ id: string }[]>`
       SELECT id FROM memberships WHERE school_id = ${schoolB.id}::uuid`;
     expect(rows).toEqual([]);
@@ -108,7 +115,7 @@ describe("a user in School A", () => {
   });
 
   it("cannot update or delete School B's rows", async () => {
-    await withContext(app, ctxA(), async (tx) => {
+    await withContext(appUnguarded, ctxA(), async (tx) => {
       const updated = await tx.membership.updateMany({
         where: { id: memberB.id },
         data: { status: "removed" },
@@ -133,7 +140,7 @@ describe("a user in School A", () => {
 
   it("cannot insert rows into School B", async () => {
     await expect(
-      withContext(app, ctxA(), (tx) =>
+      withContext(appUnguarded, ctxA(), (tx) =>
         tx.membership.create({
           data: { schoolId: schoolB.id, userId: userA.id, displayName: "Intruder" },
         }),
@@ -142,7 +149,7 @@ describe("a user in School A", () => {
   });
 
   it("sees nothing when it claims to be in School B (forged school id)", async () => {
-    const db = scopedDb(app, { userId: userA.id, schoolId: schoolB.id });
+    const db = scopedDb(appUnguarded, { userId: userA.id, schoolId: schoolB.id });
     expect(await db.membership.findMany()).toEqual([]);
     expect(await db.school.findMany()).toEqual([]);
     expect(await db.$queryRaw<unknown[]>`SELECT * FROM memberships`).toEqual([]);
@@ -151,7 +158,7 @@ describe("a user in School A", () => {
 
 describe("a request with no school set", () => {
   it("sees no school rows at all", async () => {
-    for (const db of [app, scopedDb(app, { userId: userA.id, schoolId: null })]) {
+    for (const db of [appUnguarded, scopedDb(appUnguarded, { userId: userA.id, schoolId: null })]) {
       expect(await db.membership.findMany()).toEqual([]);
       expect(await db.membershipRole.findMany()).toEqual([]);
       expect(await db.permissionGrant.findMany()).toEqual([]);
@@ -166,7 +173,7 @@ describe("a request with no school set", () => {
 describe("Arend Studio admins", () => {
   it("cannot see a school's data unless support access is on", async () => {
     const admin = await makeAdmin();
-    const db = scopedDb(app, { userId: admin.id, schoolId: schoolA.id });
+    const db = scopedDb(appUnguarded, { userId: admin.id, schoolId: schoolA.id });
     expect(await db.membership.findMany()).toEqual([]);
 
     await owner.school.update({
@@ -185,33 +192,38 @@ describe("Arend Studio admins", () => {
 
 describe("the audit log", () => {
   it("is append-only for the app", async () => {
-    await withContext(app, ctxA(), (tx) =>
+    await withContext(appUnguarded, ctxA(), (tx) =>
       tx.auditLog.create({
         data: { schoolId: schoolA.id, actorId: userA.id, action: "test.append" },
       }),
     );
     await expect(
-      withContext(app, ctxA(), (tx) =>
+      withContext(appUnguarded, ctxA(), (tx) =>
         tx.auditLog.updateMany({ where: { schoolId: schoolA.id }, data: { action: "x" } }),
       ),
     ).rejects.toThrow();
     await expect(
-      withContext(app, ctxA(), (tx) => tx.auditLog.deleteMany({ where: { schoolId: schoolA.id } })),
+      withContext(appUnguarded, ctxA(), (tx) =>
+        tx.auditLog.deleteMany({ where: { schoolId: schoolA.id } }),
+      ),
     ).rejects.toThrow();
   });
 
   it("records platform events (like sign-in) for the acting user only", async () => {
     const ctx = { userId: userA.id, schoolId: null };
-    await withContext(app, ctx, (tx) =>
+    await withContext(appUnguarded, ctx, (tx) =>
       tx.auditLog.create({ data: { schoolId: null, actorId: userA.id, action: "auth.sign_in" } }),
     );
     await expect(
-      withContext(app, ctx, (tx) =>
+      withContext(appUnguarded, ctx, (tx) =>
         tx.auditLog.create({ data: { schoolId: null, actorId: userB.id, action: "auth.sign_in" } }),
       ),
     ).rejects.toThrow(/row-level security/i);
     // Another user cannot read them.
-    const others = await scopedDb(app, { userId: userB.id, schoolId: null }).auditLog.findMany({
+    const others = await scopedDb(appUnguarded, {
+      userId: userB.id,
+      schoolId: null,
+    }).auditLog.findMany({
       where: { actorId: userA.id },
     });
     expect(others).toEqual([]);

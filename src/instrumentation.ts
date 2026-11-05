@@ -1,6 +1,7 @@
 /**
  * Runs once when the server starts (Next.js instrumentation).
- *  - Production refuses to start with development messaging settings (console SMS, console
+ *  - Production refuses to start with a secret copied from the repository's examples, or with
+ *    development messaging settings (console SMS, console
  *    WhatsApp, ALLOW_CONSOLE_SMS) unless KIOTA_DEMO=1 marks a demo server.
  *  - Starts the message sending worker (MESSAGE_WORKER=off to run without it).
  */
@@ -10,7 +11,8 @@ export async function register() {
 
   const { smsConfigProblem } = await import("./lib/sms");
   const { whatsappConfigProblem } = await import("./lib/whatsapp");
-  const problem = smsConfigProblem() ?? whatsappConfigProblem();
+  const { secretsProblem } = await import("./lib/secrets-check");
+  const problem = secretsProblem() ?? smsConfigProblem() ?? whatsappConfigProblem();
   if (problem) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(`Kiota will not start: ${problem}. See docs/messaging.md.`);

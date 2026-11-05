@@ -15,7 +15,7 @@
 import type { PrismaClient } from "../src/generated/prisma/client";
 import { BUILT_IN_ROLES } from "../src/lib/auth/catalog";
 import { effectivePermissions } from "../src/lib/auth/permissions";
-import { createClient, withContext } from "../src/lib/db-core";
+import { createAppClient, withContext } from "../src/lib/db-core";
 import { parseNoticeInput, sendFeeReminders, sendNotice } from "../src/lib/messaging/service";
 import { ensureMessagingMember } from "../src/lib/messaging/system";
 import { adminCreditWallet, adminSetWallet } from "../src/lib/messaging/wallet";
@@ -107,7 +107,7 @@ export async function seedMessageHistory(
   owner: PrismaClient,
   schools: readonly (SchoolSeed & { bursarPhone: string })[],
 ) {
-  const app = createClient(process.env.APP_DATABASE_URL);
+  const app = createAppClient();
   setSmsDriverForTests(consoleDriver);
   setWhatsAppDriverForTests(null);
   try {

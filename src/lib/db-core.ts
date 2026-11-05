@@ -4,6 +4,7 @@
  */
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { guardEnabled, withSchoolGuard } from "./db-guard";
 
 export type DbContext = {
   /** The signed-in user. */
@@ -25,9 +26,13 @@ export function createClient(connectionString: string | undefined) {
   });
 }
 
-/** Client for the non-owner app role (RLS always applies). */
+/**
+ * Client for the non-owner app role (RLS always applies). In development and tests every query
+ * on a school-owned model must also name the school (src/lib/db-guard.ts).
+ */
 export function createAppClient() {
-  return createClient(process.env.APP_DATABASE_URL);
+  const client = createClient(process.env.APP_DATABASE_URL);
+  return guardEnabled() ? withSchoolGuard(client) : client;
 }
 
 function setContextSql(ctx: DbContext) {

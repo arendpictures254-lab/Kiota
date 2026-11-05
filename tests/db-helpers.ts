@@ -7,6 +7,11 @@ import { createAppClient, createClient } from "../src/lib/db-core";
 
 export const owner = createClient(process.env.DATABASE_URL);
 export const app = createAppClient();
+/**
+ * The app role WITHOUT the school-wall guard (src/lib/db-guard.ts), for tests that leave out
+ * schoolId on purpose to prove row-level security still blocks other schools.
+ */
+export const appUnguarded = createClient(process.env.APP_DATABASE_URL);
 
 export function randomPhone(): string {
   return `+2547${randomInt(10_000_000, 99_999_999)}`;

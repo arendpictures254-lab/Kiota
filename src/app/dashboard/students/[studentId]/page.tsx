@@ -65,7 +65,7 @@ async function Student({ params, searchParams }: Props) {
   const canEdit = actor.permissions.has("students.edit");
   const canFees = actor.permissions.has("fees.view") || actor.permissions.has("fees.collect");
   const feeBalance = canFees
-    ? await withContext(deps.db, ctxOf(actor), (tx) => studentPosition(tx, s.id))
+    ? await withContext(deps.db, ctxOf(actor), (tx) => studentPosition(tx, actor.schoolId, s.id))
     : null;
   const feePhone = s.guardians.find((g) => g.receivesFees)?.user.phone;
   const canMedical = actor.permissions.has("students.medical.view");

@@ -28,8 +28,12 @@ async function Pay({ searchParams }: Pick<PageProps<"/dashboard/fees/pay">, "sea
   const pre =
     typeof student === "string" && /^[0-9a-f-]{36}$/i.test(student)
       ? await withContext(deps.db, ctxOf(actor), async (tx) => {
-          const s = await tx.student.findUnique({ where: { id: student } });
-          return s ? { s, balance: (await studentPosition(tx, s.id)).balanceCents } : null;
+          const s = await tx.student.findUnique({
+            where: { schoolId: actor.schoolId, id: student },
+          });
+          return s
+            ? { s, balance: (await studentPosition(tx, actor.schoolId, s.id)).balanceCents }
+            : null;
         })
       : null;
 

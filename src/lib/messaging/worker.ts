@@ -61,12 +61,21 @@ async function processSchool(
   const claimed = await withContext(db, ctx, async (tx) => {
     // A worker that died mid-send leaves messages "sending": try them again.
     await tx.message.updateMany({
-      where: { status: "sending", lockedAt: { lt: new Date(now.getTime() - STUCK_MS) } },
+      where: {
+        schoolId: actor.schoolId,
+        status: "sending",
+        lockedAt: { lt: new Date(now.getTime() - STUCK_MS) },
+      },
       data: { status: "queued" },
     });
     if (inQuietHours(now)) {
       await tx.message.updateMany({
-        where: { status: "queued", critical: false, nextAttemptAt: { lte: now } },
+        where: {
+          schoolId: actor.schoolId,
+          status: "queued",
+          critical: false,
+          nextAttemptAt: { lte: now },
+        },
         data: { nextAttemptAt: nextSendTime(now, false) },
       });
     }
@@ -84,7 +93,7 @@ async function processSchool(
     if (ids.length === 0) return { messages: [] as Message[], senderId: null as string | null };
     const [messages, wallet] = await Promise.all([
       tx.message.findMany({
-        where: { id: { in: ids.map((r) => r.id) } },
+        where: { schoolId: actor.schoolId, id: { in: ids.map((r) => r.id) } },
         orderBy: { createdAt: "asc" },
       }),
       tx.wallet.findUniqueOrThrow({ where: { schoolId } }),
@@ -165,7 +174,7 @@ async function sendOne(
   return withContext(db, ctx, async (tx) => {
     if (r.ok) {
       await tx.message.update({
-        where: { id: m.id },
+        where: { schoolId: ctx.schoolId, id: m.id },
         data: {
           status: "sent",
           sentAt: now,
@@ -199,7 +208,7 @@ async function sendOne(
     }
     if (r.retryable && m.attempts < MAX_ATTEMPTS) {
       await tx.message.update({
-        where: { id: m.id },
+        where: { schoolId: ctx.schoolId, id: m.id },
         data: {
           status: "queued",
           lockedAt: null,
@@ -220,11 +229,13 @@ async function sendOne(
  */
 export async function failMessage(tx: Tx, ctx: Ctx, messageId: string, error: string, now: Date) {
   const changed = await tx.message.updateMany({
-    where: { id: messageId, status: { in: ["queued", "sending", "sent"] } },
+    where: { schoolId: ctx.schoolId, id: messageId, status: { in: ["queued", "sending", "sent"] } },
     data: { status: "failed", failedAt: now, error: error.slice(0, 300), lockedAt: null },
   });
   if (changed.count === 0) return false;
-  const m = await tx.message.findUniqueOrThrow({ where: { id: messageId } });
+  const m = await tx.message.findUniqueOrThrow({
+    where: { schoolId: ctx.schoolId, id: messageId },
+  });
   if (m.costCents > 0) {
     await tx.walletEntry.createMany({
       data: [
@@ -242,7 +253,9 @@ export async function failMessage(tx: Tx, ctx: Ctx, messageId: string, error: st
   }
   if (m.channel === "whatsapp" && m.fallbackToSms) {
     const link = m.guardianLinkId
-      ? await tx.guardianLink.findUnique({ where: { id: m.guardianLinkId } })
+      ? await tx.guardianLink.findUnique({
+          where: { schoolId: ctx.schoolId, id: m.guardianLinkId },
+        })
       : null;
     const { planned } = await planDrafts(tx, ctx.schoolId, [
       {
@@ -299,6 +312,7 @@ export async function applyDeliveryReport(
   return withContext(db, ctx, async (tx) => {
     const m = await tx.message.findUnique({
       where: {
+        schoolId: actor.schoolId,
         provider_providerMessageId: {
           provider: report.provider,
           providerMessageId: report.providerMessageId,
@@ -312,13 +326,13 @@ export async function applyDeliveryReport(
     }
     if (report.outcome === "delivered") {
       const n = await tx.message.updateMany({
-        where: { id: m.id, status: { in: ["sending", "sent"] } },
+        where: { schoolId: actor.schoolId, id: m.id, status: { in: ["sending", "sent"] } },
         data: { status: "delivered", deliveredAt: now },
       });
       return n.count ? ("delivered" as const) : ("ignored" as const);
     }
     const n = await tx.message.updateMany({
-      where: { id: m.id, status: "sending" },
+      where: { schoolId: actor.schoolId, id: m.id, status: "sending" },
       data: { status: "sent", sentAt: now },
     });
     return n.count ? ("sent" as const) : ("ignored" as const);
@@ -343,6 +357,7 @@ export async function checkLowBalance(db: PrismaClient, ctx: Ctx, now = new Date
     });
     const members = await tx.membership.findMany({
       where: {
+        schoolId: ctx.schoolId,
         status: "active",
         roles: { none: { role: { key: { in: SYSTEM_ROLES } } } },
         OR: [

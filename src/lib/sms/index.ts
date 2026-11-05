@@ -11,6 +11,7 @@
  */
 import { africasTalkingDriver } from "./africastalking-driver";
 import { consoleDriver } from "./console-driver";
+import { toPlainSms } from "@/lib/messaging/units";
 
 export type SmsMessage = {
   /** E.164 phone number. */
@@ -89,8 +90,9 @@ export function platformSenderId(): string | null {
   return process.env.SMS_PLATFORM_SENDER_ID || null;
 }
 
+/** Every SMS goes out as plain GSM-7 where possible: curly quotes and long dashes are replaced. */
 export async function sendSms(message: SmsMessage): Promise<SmsResult> {
-  return getSmsDriver().send(message);
+  return getSmsDriver().send({ ...message, text: toPlainSms(message.text) });
 }
 
 /**

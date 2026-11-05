@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countSms, isGsm7, toPlainSms } from "./units";
+import { countSms, isGsm7, replacedChars, toPlainSms } from "./units";
 
 describe("SMS unit counting", () => {
   it("counts an empty message as no units", () => {
@@ -57,5 +57,26 @@ describe("SMS unit counting", () => {
   it("replaces look-alike characters with plain ones", () => {
     expect(toPlainSms("It’s “ready” – now…")).toBe('It\'s "ready" - now...');
     expect(isGsm7(toPlainSms("It’s “ready” – now…"))).toBe(true);
+  });
+});
+
+describe("plain SMS text", () => {
+  it("replaces quotes, dashes, primes, bullets and invisible spaces with GSM-7 ones", () => {
+    const pasted = "„Karibu“ – ‘wazazi’ • 5′ … ready now​";
+    expect(toPlainSms(pasted)).toBe("\"Karibu\" - 'wazazi' - 5' ... ready now");
+    expect(isGsm7(toPlainSms(pasted))).toBe(true);
+    expect(replacedChars("It’s – ok")).toEqual(["’", "–"]);
+  });
+
+  it("leaves Kiswahili and plain text exactly as written", () => {
+    const sw = "Mzazi, karo ya muhula wa kwanza ni KES 12,000. Asante sana!";
+    expect(toPlainSms(sw)).toBe(sw);
+    expect(replacedChars(sw)).toEqual([]);
+    expect(countSms(toPlainSms(sw)).encoding).toBe("GSM-7");
+  });
+
+  it("keeps emoji (they still need Unicode)", () => {
+    expect(toPlainSms("Asante 🙏")).toBe("Asante 🙏");
+    expect(countSms(toPlainSms("Asante 🙏")).encoding).toBe("Unicode");
   });
 });

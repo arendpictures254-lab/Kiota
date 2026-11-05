@@ -5,6 +5,7 @@ import { scopedDb } from "@/lib/db-core";
 import type { Actor } from "@/lib/service-kit";
 import {
   app,
+  appUnguarded,
   makeMember,
   makeSchool,
   makeStream,
@@ -312,7 +313,7 @@ describe("guardians across schools", () => {
   });
 
   it("never lets a school see the parent's other schools", async () => {
-    const dbB = scopedDb(app, { userId: b.actor.userId, schoolId: b.school.id });
+    const dbB = scopedDb(appUnguarded, { userId: b.actor.userId, schoolId: b.school.id });
     const links = await dbB.guardianLink.findMany();
     expect(links).toHaveLength(1);
     expect(links[0].name).toBe("Mama Brian"); // the school's own name for the parent

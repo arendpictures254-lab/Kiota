@@ -258,11 +258,13 @@ export async function handleTopupCallback(db: PrismaClient, token: string, body:
   const item = (n: string) => items.find((i) => i.Name === n)?.Value;
 
   const next = await withContext(db, ctxOf(actor), async (tx) => {
-    const row = await tx.walletTopup.findUnique({ where: { checkoutRequestId } });
+    const row = await tx.walletTopup.findUnique({
+      where: { schoolId: actor.schoolId, checkoutRequestId },
+    });
     if (!row || row.status !== "stk_requested") return null; // a repeat callback
     if (String(cb.ResultCode) !== "0") {
       await tx.walletTopup.update({
-        where: { id: row.id },
+        where: { schoolId: actor.schoolId, id: row.id },
         data: { status: "failed", statusDetail: (cb.ResultDesc ?? "Not paid").slice(0, 300) },
       });
       return null;
@@ -271,7 +273,7 @@ export async function handleTopupCallback(db: PrismaClient, token: string, body:
     const paidCents = "error" in paid ? null : paid.cents;
     if (paidCents !== null && paidCents !== row.amountCents) {
       await tx.walletTopup.update({
-        where: { id: row.id },
+        where: { schoolId: actor.schoolId, id: row.id },
         data: {
           status: "failed",
           statusDetail: "The amount does not match the request. Not credited.",
@@ -281,7 +283,7 @@ export async function handleTopupCallback(db: PrismaClient, token: string, body:
     }
     const transId = String(item("MpesaReceiptNumber") ?? "").toUpperCase() || null;
     await tx.walletTopup.update({
-      where: { id: row.id },
+      where: { schoolId: actor.schoolId, id: row.id },
       data: { status: "pending_verification", transId },
     });
     return row.id;
@@ -299,7 +301,7 @@ async function verifyAndCredit(db: PrismaClient, actor: Actor, topupId: string) 
   const cfg = platformMpesa();
   if (!cfg) return "verification_failed";
   const row = await withContext(db, ctxOf(actor), (tx) =>
-    tx.walletTopup.findUniqueOrThrow({ where: { id: topupId } }),
+    tx.walletTopup.findUniqueOrThrow({ where: { schoolId: actor.schoolId, id: topupId } }),
   );
   let detail: string;
   try {
@@ -311,7 +313,11 @@ async function verifyAndCredit(db: PrismaClient, actor: Actor, topupId: string) 
   }
   await withContext(db, ctxOf(actor), (tx) =>
     tx.walletTopup.updateMany({
-      where: { id: topupId, status: { in: ["pending_verification", "verification_failed"] } },
+      where: {
+        schoolId: actor.schoolId,
+        id: topupId,
+        status: { in: ["pending_verification", "verification_failed"] },
+      },
       data: { status: "verification_failed", statusDetail: detail.slice(0, 300) },
     }),
   );
@@ -321,11 +327,17 @@ async function verifyAndCredit(db: PrismaClient, actor: Actor, topupId: string) 
 async function creditTopup(db: PrismaClient, actor: Actor, topupId: string) {
   return withContext(db, ctxOf(actor), async (tx) => {
     const claimed = await tx.walletTopup.updateMany({
-      where: { id: topupId, status: { in: ["pending_verification", "verification_failed"] } },
+      where: {
+        schoolId: actor.schoolId,
+        id: topupId,
+        status: { in: ["pending_verification", "verification_failed"] },
+      },
       data: { status: "posting" },
     });
     if (claimed.count === 0) return "duplicate";
-    const row = await tx.walletTopup.findUniqueOrThrow({ where: { id: topupId } });
+    const row = await tx.walletTopup.findUniqueOrThrow({
+      where: { schoolId: actor.schoolId, id: topupId },
+    });
     await tx.walletEntry.create({
       data: {
         schoolId: row.schoolId,
@@ -337,7 +349,7 @@ async function creditTopup(db: PrismaClient, actor: Actor, topupId: string) {
       },
     });
     await tx.walletTopup.update({
-      where: { id: row.id },
+      where: { schoolId: actor.schoolId, id: row.id },
       data: { status: "completed", statusDetail: null, completedAt: new Date() },
     });
     await tx.wallet.update({
@@ -360,7 +372,7 @@ async function creditTopup(db: PrismaClient, actor: Actor, topupId: string) {
 export async function retryTopup({ db }: Deps, actor: Actor, topupId: string) {
   assertCan(actor.permissions, "wallet.topup");
   const row = await withContext(db, ctxOf(actor), (tx) =>
-    tx.walletTopup.findUnique({ where: { id: topupId } }),
+    tx.walletTopup.findUnique({ where: { schoolId: actor.schoolId, id: topupId } }),
   );
   if (
     !row ||
@@ -370,7 +382,7 @@ export async function retryTopup({ db }: Deps, actor: Actor, topupId: string) {
   if (row.status === "stk_requested") {
     await withContext(db, ctxOf(actor), (tx) =>
       tx.walletTopup.updateMany({
-        where: { id: topupId, status: "stk_requested" },
+        where: { schoolId: actor.schoolId, id: topupId, status: "stk_requested" },
         data: { status: "pending_verification" },
       }),
     );

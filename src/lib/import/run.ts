@@ -21,15 +21,17 @@ type Payload = { sheets: SheetRows; problems: ReadProblem[] };
 export async function loadImportContext(tx: Tx, actor: Actor): Promise<ImportContext> {
   const [levels, houses, staff, students] = await Promise.all([
     tx.level.findMany({
+      where: { schoolId: actor.schoolId },
       orderBy: { sortOrder: "asc" },
       include: { classes: { orderBy: { position: "asc" }, include: { streams: true } } },
     }),
-    tx.house.findMany(),
+    tx.house.findMany({ where: { schoolId: actor.schoolId } }),
     tx.membership.findMany({
-      where: { status: "active" },
+      where: { schoolId: actor.schoolId, status: "active" },
       include: { user: { select: { phone: true } } },
     }),
     tx.student.findMany({
+      where: { schoolId: actor.schoolId },
       select: {
         admissionNumber: true,
         firstName: true,
@@ -112,7 +114,9 @@ export async function previewImport(
 export async function getImportPreview({ db }: Deps, actor: Actor, batchId: string) {
   assertCan(actor.permissions, "import.run");
   return withContext(db, ctxOf(actor), async (tx) => {
-    const batch = await tx.importBatch.findUnique({ where: { id: batchId } });
+    const batch = await tx.importBatch.findUnique({
+      where: { schoolId: actor.schoolId, id: batchId },
+    });
     if (!batch) return null;
     if (batch.status === "imported") return { batch, plan: null };
     const payload = batch.payload as unknown as Payload;
@@ -139,7 +143,9 @@ export async function confirmImport(
     db,
     ctxOf(actor),
     async (tx) => {
-      const batch = await tx.importBatch.findUnique({ where: { id: batchId } });
+      const batch = await tx.importBatch.findUnique({
+        where: { schoolId: actor.schoolId, id: batchId },
+      });
       if (!batch) throw new ValidationError("This upload was not found. Upload the file again.");
       if (batch.status !== "previewed")
         throw new ValidationError("This file has already been imported.");
@@ -158,7 +164,7 @@ export async function confirmImport(
 
       const summary: ImportSummary = { ...plan.counts, fileName: batch.fileName };
       await tx.importBatch.update({
-        where: { id: batchId },
+        where: { schoolId: actor.schoolId, id: batchId },
         data: { status: "imported", importedAt: new Date(), summary },
       });
       await audit(tx, {
@@ -196,7 +202,10 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
     });
   }
 
-  const classes = await tx.class.findMany({ include: { streams: true } });
+  const classes = await tx.class.findMany({
+    where: { schoolId: actor.schoolId },
+    include: { streams: true },
+  });
   const classByName = new Map(classes.map((c) => [c.name.toLowerCase(), c]));
   const streamIds = new Map<string, string>();
   for (const c of classes)
@@ -212,13 +221,18 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
     }
     if (s.teacherMembershipId) {
       await tx.stream.update({
-        where: { id },
+        where: { schoolId: actor.schoolId, id },
         data: { classTeacherMembershipId: s.teacherMembershipId },
       });
     }
   }
 
-  const houses = new Map((await tx.house.findMany()).map((h) => [h.name.toLowerCase(), h.id]));
+  const houses = new Map(
+    (await tx.house.findMany({ where: { schoolId: actor.schoolId } })).map((h) => [
+      h.name.toLowerCase(),
+      h.id,
+    ]),
+  );
   const studentIds = new Map<string, string>();
   const reason = `Imported from ${fileName}`.slice(0, 200);
 
@@ -243,7 +257,10 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
 
   // Existing students (re-import): one query, then one UPDATE statement per batch.
   const existing = await tx.student.findMany({
-    where: { admissionNumber: { in: plan.students.map((p) => p.admissionNumber) } },
+    where: {
+      schoolId: actor.schoolId,
+      admissionNumber: { in: plan.students.map((p) => p.admissionNumber) },
+    },
     select: { id: true, admissionNumber: true },
   });
   const existingIds = new Map(existing.map((s) => [s.admissionNumber, s.id]));
@@ -299,7 +316,7 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
     if (!p.medicalNotes && !p.allergies) continue;
     const studentId = idOf(p.admissionNumber);
     await tx.studentMedical.upsert({
-      where: { studentId },
+      where: { schoolId, studentId },
       create: { schoolId, studentId, medicalNotes: p.medicalNotes, allergies: p.allergies },
       update: { medicalNotes: p.medicalNotes, allergies: p.allergies },
     });
@@ -310,7 +327,10 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
   const haveBalance = new Set(
     (
       await tx.openingBalance.findMany({
-        where: { studentId: { in: withBalance.map((p) => idOf(p.admissionNumber)) } },
+        where: {
+          schoolId: actor.schoolId,
+          studentId: { in: withBalance.map((p) => idOf(p.admissionNumber)) },
+        },
         select: { studentId: true },
       })
     ).map((b) => b.studentId),
@@ -344,7 +364,10 @@ async function executePlan(tx: Tx, actor: Actor, plan: ImportPlan, fileName: str
   const missing = plan.guardians.filter((g) => !studentIds.has(admissionKey(g.admissionNumber)));
   if (missing.length) {
     const found = await tx.student.findMany({
-      where: { admissionNumber: { in: missing.map((g) => g.admissionNumber) } },
+      where: {
+        schoolId: actor.schoolId,
+        admissionNumber: { in: missing.map((g) => g.admissionNumber) },
+      },
       select: { id: true, admissionNumber: true },
     });
     for (const s of found) studentIds.set(admissionKey(s.admissionNumber), s.id);
@@ -383,7 +406,7 @@ export async function templateLists({ db }: Deps, actor: Actor) {
   assertCan(actor.permissions, "import.run");
   return withContext(db, ctxOf(actor), async (tx) => {
     const levels = await tx.level.findMany({
-      where: { enabled: true },
+      where: { schoolId: actor.schoolId, enabled: true },
       orderBy: { sortOrder: "asc" },
       include: { classes: { orderBy: { position: "asc" } } },
     });

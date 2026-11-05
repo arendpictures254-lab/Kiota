@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { scopedDb } from "@/lib/db-core";
 import { app, makeAdmin, makeMember, makeSchool, owner } from "../../../tests/db-helpers";
@@ -21,6 +21,11 @@ const input = (school: string) =>
     studentCount: "300",
     schoolType: "mixed",
   });
+
+// The platform-wide limit (30 requests an hour) would trip when the tests run many times an hour.
+beforeAll(async () => {
+  await owner.demoRequest.deleteMany({});
+});
 
 afterAll(async () => {
   await app.$disconnect();

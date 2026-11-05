@@ -28,9 +28,10 @@ every school-owned table has row-level security, and top-ups, price changes and 
 audit log.
 
 **SMS units.** Plain text (GSM-7) fits 160 characters in one SMS, 153 per part when longer. One
-emoji or curly quote switches the whole message to Unicode: 70 characters, 67 per part. The
-composer shows the count live, warns above one unit, and names the characters that forced
-Unicode so the writer can replace them.
+emoji switches the whole message to Unicode: 70 characters, 67 per part. Curly quotes, long
+dashes and similar look-alikes are replaced with plain ones before any SMS is sent (`sendSms()`
+and message planning both use `toPlainSms()`), and the composer says so when it happens. It
+shows the count live, warns above one unit, and names any characters that still need Unicode.
 
 ## Who can do what
 

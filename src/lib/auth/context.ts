@@ -88,7 +88,7 @@ export const getSchoolContext = cache(async (): Promise<SchoolContext | null> =>
   const [school, membership] = await Promise.all([
     scoped.school.findUnique({ where: { id: dbContext.schoolId! } }),
     scoped.membership.findFirst({
-      where: { userId: user.id, status: "active" },
+      where: { schoolId: dbContext.schoolId!, userId: user.id, status: "active" },
       include: {
         roles: { include: { role: { include: { permissions: true } } } },
         grants: true,

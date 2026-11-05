@@ -27,13 +27,16 @@ async function Hub() {
     const from = startOfTodayNairobi();
     const [today, suspense] = await Promise.all([
       tx.payment.aggregate({
-        where: { createdAt: { gte: from }, reversal: null },
+        where: { schoolId: actor.schoolId, createdAt: { gte: from }, reversal: null },
         _sum: { amountCents: true },
         _count: true,
       }),
       can("fees.collect")
         ? tx.mpesaTransaction.count({
-            where: { status: { in: ["suspense", "verification_failed"] } },
+            where: {
+              schoolId: actor.schoolId,
+              status: { in: ["suspense", "verification_failed"] },
+            },
           })
         : 0,
     ]);

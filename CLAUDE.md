@@ -107,6 +107,11 @@ Unit tests sit next to the code as `*.test.ts(x)`; tests that need PostgreSQL ar
   `school_id = (SELECT app_current_school())`, written by hand in a migration, plus GRANTs to
   `kiota_app`. The test "every table with a school_id column has row-level security" fails
   otherwise.
+- **Every Prisma query on a school-owned model names the school** (`schoolId` in `where`, or in
+  every created row). In development and tests `src/lib/db-guard.ts` throws `School wall: Model.op
+has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
+  `school_id = ...` yourself. Tests that leave it out on purpose to prove row-level security use
+  `appUnguarded` from `tests/db-helpers.ts`.
 - Queries run with a context: `db({ userId, schoolId })` for reads, `inContext(ctx, tx => ...)` for
   writes. Both set `app.user_id` / `app.school_id` with `set_config(..., true)` in a transaction.
   `app_current_school()` only accepts the school if the user is an active member (or an Arend admin

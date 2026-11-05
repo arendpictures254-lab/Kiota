@@ -5,6 +5,7 @@ import { scopedDb, withContext } from "@/lib/db-core";
 import type { Actor } from "@/lib/service-kit";
 import {
   app,
+  appUnguarded,
   makeMember,
   makeSchool,
   makeStream,
@@ -90,7 +91,7 @@ describe("medical notes", () => {
     const s = await getStudent(deps, bursar, eastStudent.id);
     expect(s?.firstName).toBe("Zawadi");
     expect(s?.medical).toBeNull();
-    const db = scopedDb(app, { userId: bursar.userId, schoolId });
+    const db = scopedDb(appUnguarded, { userId: bursar.userId, schoolId });
     expect(await db.studentMedical.findMany()).toEqual([]);
     expect(await db.$queryRaw<unknown[]>`SELECT * FROM student_medical`).toEqual([]);
     // ...and cannot be written either.
@@ -121,9 +122,9 @@ describe("class teachers", () => {
   });
 
   it("cannot read the guardians or change students of other streams", async () => {
-    const db = scopedDb(app, { userId: teacher.userId, schoolId });
+    const db = scopedDb(appUnguarded, { userId: teacher.userId, schoolId });
     expect(await db.guardianLink.findMany({ where: { studentId: westStudent.id } })).toEqual([]);
-    const updated = await withContext(app, { userId: teacher.userId, schoolId }, (tx) =>
+    const updated = await withContext(appUnguarded, { userId: teacher.userId, schoolId }, (tx) =>
       tx.student.updateMany({ where: { id: westStudent.id }, data: { firstName: "Changed" } }),
     );
     expect(updated.count).toBe(0);

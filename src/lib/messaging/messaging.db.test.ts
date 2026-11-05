@@ -15,6 +15,7 @@ import {
 } from "@/lib/whatsapp";
 import {
   app,
+  appUnguarded,
   makeAdmin,
   makeMember,
   makeSchool,
@@ -346,7 +347,7 @@ describe("the wallet: reserve, settle, refund", () => {
   });
 
   it("is append-only: the app can never change or delete a wallet entry", async () => {
-    const db = scopedDb(app, { userId: A.director.userId, schoolId: A.school.id });
+    const db = scopedDb(appUnguarded, { userId: A.director.userId, schoolId: A.school.id });
     await expect(db.walletEntry.updateMany({ data: { amountCents: 999_999 } })).rejects.toThrow();
     await expect(db.walletEntry.deleteMany({})).rejects.toThrow();
     // Prices and overdraft are Arend Studio's to set, never the school's.
@@ -856,7 +857,7 @@ describe("school walls", () => {
     >`SELECT count(*) AS n FROM messages WHERE school_id = ${A.school.id}::uuid`;
     expect(Number(raw[0].n)).toBe(0);
     // Asking for School A while signed in to School B sees nothing either.
-    const forged = scopedDb(app, { userId: B.director.userId, schoolId: A.school.id });
+    const forged = scopedDb(appUnguarded, { userId: B.director.userId, schoolId: A.school.id });
     expect(await forged.message.findMany()).toEqual([]);
     expect(await forged.walletEntry.findMany()).toEqual([]);
     const listed = await listMessages(deps, B.director, {});

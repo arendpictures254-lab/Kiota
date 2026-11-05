@@ -44,23 +44,26 @@ export async function getReceiptView(
   canSeeFees(actor);
   return withContext(db, ctxOf(actor), async (tx) => {
     const r = await tx.receipt.findUnique({
-      where: { id: receiptId },
+      where: { schoolId: actor.schoolId, id: receiptId },
       include: { payment: { include: { reversal: true } } },
     });
     if (!r) return null;
     const [student, school, entry, heads, members] = await Promise.all([
       tx.student.findUniqueOrThrow({
-        where: { id: r.payment.studentId },
+        where: { schoolId: actor.schoolId, id: r.payment.studentId },
         include: { class: true, stream: true },
       }),
       tx.school.findUniqueOrThrow({ where: { id: actor.schoolId } }),
       tx.ledgerEntry.findFirst({
-        where: { paymentId: r.paymentId, type: "payment" },
+        where: { schoolId: actor.schoolId, paymentId: r.paymentId, type: "payment" },
         include: { lines: true },
       }),
-      tx.voteHead.findMany(),
+      tx.voteHead.findMany({ where: { schoolId: actor.schoolId } }),
       tx.membership.findMany({
-        where: { userId: { in: [r.issuedById, r.payment.reversal?.reversedById ?? r.issuedById] } },
+        where: {
+          schoolId: actor.schoolId,
+          userId: { in: [r.issuedById, r.payment.reversal?.reversedById ?? r.issuedById] },
+        },
         select: { userId: true, displayName: true },
       }),
     ]);
@@ -164,18 +167,18 @@ export async function getStatement({ db }: Deps, actor: Actor, studentId: string
   canSeeFees(actor);
   return withContext(db, ctxOf(actor), async (tx) => {
     const student = await tx.student.findUnique({
-      where: { id: studentId },
+      where: { schoolId: actor.schoolId, id: studentId },
       include: { class: true, stream: true },
     });
     if (!student) return null;
     const [school, entries, receipts] = await Promise.all([
       tx.school.findUniqueOrThrow({ where: { id: actor.schoolId } }),
       tx.ledgerEntry.findMany({
-        where: { studentId, type: { not: "credit_applied" } },
+        where: { schoolId: actor.schoolId, studentId, type: { not: "credit_applied" } },
         orderBy: { createdAt: "asc" },
       }),
       tx.receipt.findMany({
-        where: { payment: { studentId } },
+        where: { schoolId: actor.schoolId, payment: { studentId } },
         select: { paymentId: true, number: true, id: true },
       }),
     ]);

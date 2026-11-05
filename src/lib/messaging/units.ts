@@ -106,19 +106,51 @@ export function countSms(text: string): SmsCount {
   };
 }
 
-/** Common look-alikes that silently switch a message to Unicode, with plain replacements. */
+/**
+ * Look-alikes (pasted from Word, WhatsApp or a phone keyboard) that would silently switch a
+ * whole message to Unicode (70 characters per SMS instead of 160), with plain GSM-7 ones.
+ * Kiswahili needs nothing here: it is written in plain Latin letters.
+ */
 const PLAIN: Record<string, string> = {
-  "‘": "'",
-  "’": "'",
-  "“": '"',
-  "”": '"',
-  "–": "-",
-  "—": "-",
-  "…": "...",
-  " ": " ",
+  "‘": "'", // ‘
+  "’": "'", // ’
+  "‚": "'", // ‚
+  "‛": "'",
+  "′": "'", // ′
+  "´": "'", // ´
+  "`": "'",
+  "“": '"', // “
+  "”": '"', // ”
+  "„": '"', // „
+  "‟": '"',
+  "″": '"', // ″
+  "«": '"', // «
+  "»": '"', // »
+  "‐": "-", // hyphen
+  "‑": "-",
+  "‒": "-",
+  "–": "-", // –
+  "—": "-", // —
+  "―": "-",
+  "−": "-", // minus
+  "•": "-", // •
+  "…": "...", // …
+  " ": " ", // non-breaking space
+  " ": " ",
+  " ": " ",
+  " ": " ",
+  "​": "", // zero-width characters
+  "‌": "",
+  "‍": "",
+  "﻿": "",
 };
 
-/** Replace curly quotes and dashes (often pasted from Word or WhatsApp) with GSM-7 ones. */
+/** Replace curly quotes, long dashes and similar with plain GSM-7 characters. */
 export function toPlainSms(text: string): string {
   return [...text].map((c) => PLAIN[c] ?? c).join("");
+}
+
+/** The look-alikes in a text that toPlainSms() would replace (for the composer's note). */
+export function replacedChars(text: string): string[] {
+  return [...new Set([...text].filter((c) => c in PLAIN))];
 }

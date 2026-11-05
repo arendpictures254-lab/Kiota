@@ -32,9 +32,9 @@ export async function ensureMessagingMember(tx: Tx, schoolId: string) {
     create: { schoolId, userId, displayName: "Messages (automatic)" },
     update: { status: "active" },
   });
-  const role = await tx.role.findUniqueOrThrow({ where: { key: ROLE } });
+  const role = await tx.role.findUniqueOrThrow({ where: { schoolId: null, key: ROLE } });
   await tx.membershipRole.upsert({
-    where: { membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
+    where: { schoolId, membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
     create: { schoolId, membershipId: membership.id, roleId: role.id },
     update: {},
   });

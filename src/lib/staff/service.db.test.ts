@@ -3,6 +3,7 @@ import { BUILT_IN_ROLES, type PermissionKey } from "@/lib/auth/catalog";
 import { ForbiddenError, effectivePermissions } from "@/lib/auth/permissions";
 import {
   app,
+  appUnguarded,
   makeAdmin,
   makeMember,
   makeSchool,
@@ -220,7 +221,7 @@ describe("creating schools", () => {
     // ...but cannot see the new school's data afterwards.
     const { scopedDb } = await import("@/lib/db-core");
     expect(
-      await scopedDb(app, { userId: admin.id, schoolId: newId }).membership.findMany(),
+      await scopedDb(appUnguarded, { userId: admin.id, schoolId: newId }).membership.findMany(),
     ).toEqual([]);
   });
 

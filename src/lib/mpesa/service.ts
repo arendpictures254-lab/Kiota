@@ -98,9 +98,9 @@ async function ensureSystemMember(tx: Tx, schoolId: string) {
     create: { schoolId, userId, displayName: "M-Pesa (automatic)" },
     update: { status: "active" },
   });
-  const role = await tx.role.findUniqueOrThrow({ where: { key: SYSTEM_ROLE } });
+  const role = await tx.role.findUniqueOrThrow({ where: { schoolId: null, key: SYSTEM_ROLE } });
   await tx.membershipRole.upsert({
-    where: { membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
+    where: { schoolId, membershipId_roleId: { membershipId: membership.id, roleId: role.id } },
     create: { schoolId, membershipId: membership.id, roleId: role.id },
     update: {},
   });
@@ -287,15 +287,21 @@ async function postConfirmed(
 ) {
   return withContext(db, ctxOf(actor), async (tx) => {
     const claimed = await tx.mpesaTransaction.updateMany({
-      where: { id: txnId, status: { in: ["pending_verification", "verification_failed"] } },
+      where: {
+        schoolId: actor.schoolId,
+        id: txnId,
+        status: { in: ["pending_verification", "verification_failed"] },
+      },
       data: { status: "posting" },
     });
     if (claimed.count === 0) return null;
-    const row = await tx.mpesaTransaction.findUniqueOrThrow({ where: { id: txnId } });
+    const row = await tx.mpesaTransaction.findUniqueOrThrow({
+      where: { schoolId: actor.schoolId, id: txnId },
+    });
 
     if (confirmedAmountCents !== null && confirmedAmountCents !== row.amountCents) {
       await tx.mpesaTransaction.update({
-        where: { id: txnId },
+        where: { schoolId: actor.schoolId, id: txnId },
         data: {
           status: "rejected",
           statusDetail: "The amount does not match Safaricom's record. Not posted.",
@@ -315,7 +321,7 @@ async function postConfirmed(
     const studentId = row.kind === "stk" ? row.studentId : await matchStudent(tx, row.billRef);
     if (!studentId) {
       await tx.mpesaTransaction.update({
-        where: { id: txnId },
+        where: { schoolId: actor.schoolId, id: txnId },
         data: {
           status: "suspense",
           statusDetail: row.billRef
@@ -345,7 +351,7 @@ async function postConfirmed(
       mpesaTransactionId: row.id,
     });
     await tx.mpesaTransaction.update({
-      where: { id: txnId },
+      where: { schoolId: actor.schoolId, id: txnId },
       data: { status: "posted", statusDetail: null, studentId, paymentId: payment.id },
     });
     return "posted";
@@ -354,7 +360,9 @@ async function postConfirmed(
 
 async function verifyAndPost(db: PrismaClient, actor: Actor, txnId: string, token: string) {
   const { row, settings } = await withContext(db, ctxOf(actor), async (tx) => ({
-    row: await tx.mpesaTransaction.findUniqueOrThrow({ where: { id: txnId } }),
+    row: await tx.mpesaTransaction.findUniqueOrThrow({
+      where: { schoolId: actor.schoolId, id: txnId },
+    }),
     settings: await settingsFor(tx, actor.schoolId),
   }));
   const creds = credentialsFrom(settings);
@@ -376,7 +384,11 @@ async function verifyAndPost(db: PrismaClient, actor: Actor, txnId: string, toke
     if (result.state === "not_found") {
       await withContext(db, ctxOf(actor), async (tx) => {
         await tx.mpesaTransaction.updateMany({
-          where: { id: txnId, status: { in: ["pending_verification", "verification_failed"] } },
+          where: {
+            schoolId: actor.schoolId,
+            id: txnId,
+            status: { in: ["pending_verification", "verification_failed"] },
+          },
           data: {
             status: "rejected",
             statusDetail: `Safaricom did not confirm this payment: ${result.detail}. Not posted.`,
@@ -408,7 +420,11 @@ async function verifyAndPost(db: PrismaClient, actor: Actor, txnId: string, toke
 async function markFailed(db: PrismaClient, actor: Actor, txnId: string, detail: string) {
   await withContext(db, ctxOf(actor), (tx) =>
     tx.mpesaTransaction.updateMany({
-      where: { id: txnId, status: { in: ["pending_verification", "verification_failed"] } },
+      where: {
+        schoolId: actor.schoolId,
+        id: txnId,
+        status: { in: ["pending_verification", "verification_failed"] },
+      },
       data: { status: "verification_failed", statusDetail: detail.slice(0, 300) },
     }),
   );
@@ -558,11 +574,13 @@ export async function handleStkCallback(db: PrismaClient, token: string, body: S
   const item = (n: string) => items.find((i) => i.Name === n)?.Value;
 
   const next = await withContext(db, ctxOf(actor), async (tx) => {
-    const row = await tx.mpesaTransaction.findUnique({ where: { checkoutRequestId } });
+    const row = await tx.mpesaTransaction.findUnique({
+      where: { schoolId: actor.schoolId, checkoutRequestId },
+    });
     if (!row || row.status !== "stk_requested") return { id: null, outcome: "duplicate" as const };
     if (String(cb.ResultCode) !== "0") {
       await tx.mpesaTransaction.update({
-        where: { id: row.id },
+        where: { schoolId: actor.schoolId, id: row.id },
         data: { status: "failed", statusDetail: cb.ResultDesc ?? "Not paid", raw: body as object },
       });
       return { id: null, outcome: "failed" as const };
@@ -575,7 +593,7 @@ export async function handleStkCallback(db: PrismaClient, token: string, body: S
     if (other) {
       // The Paybill's C2B confirmation for the same payment arrived first: it is the one posted.
       await tx.mpesaTransaction.update({
-        where: { id: row.id },
+        where: { schoolId: actor.schoolId, id: row.id },
         data: {
           status: "merged",
           statusDetail: `Same payment as ${transId} (posted from the Paybill confirmation)`,
@@ -585,7 +603,7 @@ export async function handleStkCallback(db: PrismaClient, token: string, body: S
       return { id: null, outcome: "duplicate" as const };
     }
     await tx.mpesaTransaction.update({
-      where: { id: row.id },
+      where: { schoolId: actor.schoolId, id: row.id },
       data: {
         status: "pending_verification",
         transId: transId || null,
@@ -624,7 +642,9 @@ export async function sendStkPush(
   }
   const { settings, student } = await withContext(db, ctxOf(actor), async (tx) => ({
     settings: await tx.mpesaSettings.findUnique({ where: { schoolId: actor.schoolId } }),
-    student: await tx.student.findUnique({ where: { id: String(raw.studentId ?? "") } }),
+    student: await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: String(raw.studentId ?? "") },
+    }),
   }));
   if (!settings)
     throw new ValidationError(
@@ -672,7 +692,7 @@ export async function listMpesaTransactions({ db }: Deps, actor: Actor, statuses
   assertCan(actor.permissions, "fees.collect");
   return withContext(db, ctxOf(actor), (tx) =>
     tx.mpesaTransaction.findMany({
-      where: statuses ? { status: { in: statuses } } : {},
+      where: { schoolId: actor.schoolId, ...(statuses ? { status: { in: statuses } } : {}) },
       orderBy: { createdAt: "desc" },
       take: 200,
     }),
@@ -695,11 +715,13 @@ export async function assignSuspense(
     if (!student)
       throw new ValidationError(`No student has admission number ${admission}.`, "admissionNumber");
     const claimed = await tx.mpesaTransaction.updateMany({
-      where: { id: txnId, status: "suspense" },
+      where: { schoolId: actor.schoolId, id: txnId, status: "suspense" },
       data: { status: "posting" },
     });
     if (claimed.count === 0) throw new ValidationError("This payment is no longer in suspense.");
-    const row = await tx.mpesaTransaction.findUniqueOrThrow({ where: { id: txnId } });
+    const row = await tx.mpesaTransaction.findUniqueOrThrow({
+      where: { schoolId: actor.schoolId, id: txnId },
+    });
     const { payment, receipt } = await postPayment(tx, actor, {
       studentId: student.id,
       method: "mpesa",
@@ -711,7 +733,7 @@ export async function assignSuspense(
       mpesaTransactionId: row.id,
     });
     await tx.mpesaTransaction.update({
-      where: { id: txnId },
+      where: { schoolId: actor.schoolId, id: txnId },
       data: {
         status: "assigned",
         statusDetail: `Assigned to ${student.admissionNumber}`,

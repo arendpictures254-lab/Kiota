@@ -73,15 +73,22 @@ export async function postEntries(tx: Tx, entries: EntryInput[]) {
   }
 }
 
-export async function voteHeadRefs(tx: Tx): Promise<VoteHeadRef[]> {
-  return tx.voteHead.findMany({ select: { id: true, priority: true, name: true } });
+export async function voteHeadRefs(tx: Tx, schoolId: string): Promise<VoteHeadRef[]> {
+  return tx.voteHead.findMany({
+    where: { schoolId },
+    select: { id: true, priority: true, name: true },
+  });
 }
 
 /** A student's position from the ledger lines (never from a stored balance). */
-export async function studentPosition(tx: Tx, studentId: string): Promise<Position> {
+export async function studentPosition(
+  tx: Tx,
+  schoolId: string,
+  studentId: string,
+): Promise<Position> {
   const rows = await tx.ledgerLine.groupBy({
     by: ["voteHeadId"],
-    where: { studentId },
+    where: { schoolId, studentId },
     _sum: { amountCents: true },
   });
   return positionFromLines(
@@ -90,10 +97,10 @@ export async function studentPosition(tx: Tx, studentId: string): Promise<Positi
 }
 
 /** Positions of many students in one query. */
-export async function studentPositions(tx: Tx, studentIds: string[]) {
+export async function studentPositions(tx: Tx, schoolId: string, studentIds: string[]) {
   const rows = await tx.ledgerLine.groupBy({
     by: ["studentId", "voteHeadId"],
-    where: { studentId: { in: studentIds } },
+    where: { schoolId, studentId: { in: studentIds } },
     _sum: { amountCents: true },
   });
   const lines = new Map<string, Line[]>();
@@ -106,8 +113,8 @@ export async function studentPositions(tx: Tx, studentIds: string[]) {
 }
 
 /** Balance = sum of the ledger. */
-export async function studentBalance(tx: Tx, studentId: string) {
-  return (await studentPosition(tx, studentId)).balanceCents;
+export async function studentBalance(tx: Tx, schoolId: string, studentId: string) {
+  return (await studentPosition(tx, schoolId, studentId)).balanceCents;
 }
 
 /** After a new debit: let unallocated credit pay it (zero-sum credit_applied entry). */
@@ -117,8 +124,8 @@ export async function applyAvailableCredit(
   studentId: string,
   heads?: VoteHeadRef[],
 ) {
-  const position = await studentPosition(tx, studentId);
-  const lines = applyCredit(position, heads ?? (await voteHeadRefs(tx)));
+  const position = await studentPosition(tx, ctx.schoolId, studentId);
+  const lines = applyCredit(position, heads ?? (await voteHeadRefs(tx, ctx.schoolId)));
   if (lines.length === 0) return null;
   return postEntry(tx, {
     schoolId: ctx.schoolId,
@@ -136,15 +143,19 @@ export async function rebalanceAfterReversal(
   ctx: { schoolId: string; userId: string },
   studentId: string,
 ) {
-  const position = await studentPosition(tx, studentId);
+  const position = await studentPosition(tx, ctx.schoolId, studentId);
   if (position.unallocatedCreditCents >= 0) return null;
   const paid = await tx.ledgerLine.groupBy({
     by: ["voteHeadId"],
-    where: { studentId, amountCents: { lt: 0 }, voteHeadId: { not: null } },
+    where: { schoolId: ctx.schoolId, studentId, amountCents: { lt: 0 }, voteHeadId: { not: null } },
     _sum: { amountCents: true },
   });
   const paidByVoteHead = new Map(paid.map((p) => [p.voteHeadId!, -(p._sum.amountCents ?? 0)]));
-  const lines = rebalanceUnallocatedDebt(position, paidByVoteHead, await voteHeadRefs(tx));
+  const lines = rebalanceUnallocatedDebt(
+    position,
+    paidByVoteHead,
+    await voteHeadRefs(tx, ctx.schoolId),
+  );
   if (lines.length === 0) return null;
   return postEntry(tx, {
     schoolId: ctx.schoolId,

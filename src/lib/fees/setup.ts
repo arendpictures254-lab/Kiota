@@ -90,9 +90,17 @@ export async function getFeeSetup({ db }: Deps, actor: Actor) {
   return withContext(db, ctxOf(actor), async (tx) => {
     const [voteHeads, feeItems, structures, discounts, bursaries, terms, levels] =
       await Promise.all([
-        tx.voteHead.findMany({ orderBy: [{ priority: "asc" }, { name: "asc" }] }),
-        tx.feeItem.findMany({ include: { voteHead: true }, orderBy: { name: "asc" } }),
+        tx.voteHead.findMany({
+          where: { schoolId: actor.schoolId },
+          orderBy: [{ priority: "asc" }, { name: "asc" }],
+        }),
+        tx.feeItem.findMany({
+          where: { schoolId: actor.schoolId },
+          include: { voteHead: true },
+          orderBy: { name: "asc" },
+        }),
         tx.feeStructure.findMany({
+          where: { schoolId: actor.schoolId },
           include: {
             term: { include: { academicYear: true } },
             level: true,
@@ -106,16 +114,27 @@ export async function getFeeSetup({ db }: Deps, actor: Actor) {
           ],
         }),
         tx.discountRule.findMany({
+          where: { schoolId: actor.schoolId },
           include: { voteHead: true },
           orderBy: { siblingPosition: "asc" },
         }),
-        tx.bursary.findMany({ where: { active: true }, orderBy: { createdAt: "desc" } }),
-        tx.term.findMany({ include: { academicYear: true }, orderBy: { startDate: "desc" } }),
-        tx.level.findMany({ where: { enabled: true }, orderBy: { sortOrder: "asc" } }),
+        tx.bursary.findMany({
+          where: { schoolId: actor.schoolId, active: true },
+          orderBy: { createdAt: "desc" },
+        }),
+        tx.term.findMany({
+          where: { schoolId: actor.schoolId },
+          include: { academicYear: true },
+          orderBy: { startDate: "desc" },
+        }),
+        tx.level.findMany({
+          where: { schoolId: actor.schoolId, enabled: true },
+          orderBy: { sortOrder: "asc" },
+        }),
       ]);
     const studentIds = [...new Set(bursaries.map((b) => b.studentId))];
     const students = await tx.student.findMany({
-      where: { id: { in: studentIds } },
+      where: { schoolId: actor.schoolId, id: { in: studentIds } },
       select: { id: true, firstName: true, lastName: true, admissionNumber: true },
     });
     return { voteHeads, feeItems, structures, discounts, bursaries, terms, levels, students };
@@ -128,7 +147,7 @@ export async function getFeeSetup({ db }: Deps, actor: Actor) {
 
 export async function createDefaultVoteHeads(deps: Deps, actor: Actor) {
   return run(deps, actor, async (tx) => {
-    const existing = await tx.voteHead.count();
+    const existing = await tx.voteHead.count({ where: { schoolId: actor.schoolId } });
     if (existing > 0) throw new ValidationError("Vote heads are already set up.");
     await tx.voteHead.createMany({
       data: DEFAULT_VOTE_HEADS.map((name, i) => ({
@@ -139,7 +158,7 @@ export async function createDefaultVoteHeads(deps: Deps, actor: Actor) {
       })),
     });
     // A fee item per vote head to start with (schools rename or add their own).
-    const heads = await tx.voteHead.findMany();
+    const heads = await tx.voteHead.findMany({ where: { schoolId: actor.schoolId } });
     await tx.feeItem.createMany({
       data: heads
         .filter((h) => !h.isArrears)
@@ -159,7 +178,10 @@ export async function addVoteHead(deps: Deps, actor: Actor, rawName: unknown) {
   const name = clean(rawName);
   if (!name || name.length > 40) throw new ValidationError("Enter the vote head's name.", "name");
   return run(deps, actor, async (tx) => {
-    const last = await tx.voteHead.aggregate({ _max: { priority: true } });
+    const last = await tx.voteHead.aggregate({
+      where: { schoolId: actor.schoolId },
+      _max: { priority: true },
+    });
     const vh = await tx.voteHead.create({
       data: { schoolId: actor.schoolId, name, priority: (last._max.priority ?? 0) + 1 },
     });
@@ -184,7 +206,10 @@ export async function moveVoteHead(
   direction: "up" | "down",
 ) {
   return run(deps, actor, async (tx) => {
-    const heads = await tx.voteHead.findMany({ orderBy: [{ priority: "asc" }, { name: "asc" }] });
+    const heads = await tx.voteHead.findMany({
+      where: { schoolId: actor.schoolId },
+      orderBy: [{ priority: "asc" }, { name: "asc" }],
+    });
     const i = heads.findIndex((h) => h.id === voteHeadId);
     if (i < 0) throw new ValidationError("Vote head not found.");
     const j = direction === "up" ? i - 1 : i + 1;
@@ -199,7 +224,10 @@ export async function moveVoteHead(
     [order[i], order[j]] = [order[j], order[i]];
     for (const [k, h] of order.entries()) {
       if (h.priority !== k + 1)
-        await tx.voteHead.update({ where: { id: h.id }, data: { priority: k + 1 } });
+        await tx.voteHead.update({
+          where: { schoolId: actor.schoolId, id: h.id },
+          data: { priority: k + 1 },
+        });
     }
     return {
       result: undefined,
@@ -220,7 +248,9 @@ export async function addFeeItem(
   const name = clean(raw.name);
   if (!name) throw new ValidationError("Enter the fee item's name.", "name");
   return run(deps, actor, async (tx) => {
-    const vh = await tx.voteHead.findUnique({ where: { id: String(raw.voteHeadId ?? "") } });
+    const vh = await tx.voteHead.findUnique({
+      where: { schoolId: actor.schoolId, id: String(raw.voteHeadId ?? "") },
+    });
     if (!vh) throw new ValidationError("Choose a vote head.", "voteHeadId");
     const item = await tx.feeItem.create({
       data: { schoolId: actor.schoolId, voteHeadId: vh.id, name },
@@ -277,19 +307,20 @@ export async function saveFeeStructure(deps: Deps, actor: Actor, input: Structur
 
   return run(deps, actor, async (tx) => {
     const [term, level] = await Promise.all([
-      tx.term.findUnique({ where: { id: input.termId } }),
-      tx.level.findUnique({ where: { id: input.levelId } }),
+      tx.term.findUnique({ where: { schoolId: actor.schoolId, id: input.termId } }),
+      tx.level.findUnique({ where: { schoolId: actor.schoolId, id: input.levelId } }),
     ]);
     if (!term) throw new ValidationError("Choose a term.", "termId");
     if (!level || !level.enabled)
       throw new ValidationError("Choose a level your school offers.", "levelId");
     const items = await tx.feeItem.findMany({
-      where: { id: { in: lines.map((l) => l.feeItemId) } },
+      where: { schoolId: actor.schoolId, id: { in: lines.map((l) => l.feeItemId) } },
     });
     if (items.length !== lines.length) throw new ValidationError("Unknown fee item.");
 
     const existing = await tx.feeStructure.findUnique({
       where: {
+        schoolId: actor.schoolId,
         termId_levelId_appliesTo: {
           termId: term.id,
           levelId: level.id,
@@ -299,14 +330,20 @@ export async function saveFeeStructure(deps: Deps, actor: Actor, input: Structur
       include: { lines: true },
     });
     if (existing) {
-      const invoiced = await tx.invoice.count({ where: { feeStructureId: existing.id } });
+      const invoiced = await tx.invoice.count({
+        where: { schoolId: actor.schoolId, feeStructureId: existing.id },
+      });
       if (invoiced > 0) {
         throw new ValidationError(
           "Invoices were already generated from this fee structure. Add one-off charges instead.",
         );
       }
-      await tx.feeStructureLine.deleteMany({ where: { feeStructureId: existing.id } });
-      await tx.feeInstallment.deleteMany({ where: { feeStructureId: existing.id } });
+      await tx.feeStructureLine.deleteMany({
+        where: { schoolId: actor.schoolId, feeStructureId: existing.id },
+      });
+      await tx.feeInstallment.deleteMany({
+        where: { schoolId: actor.schoolId, feeStructureId: existing.id },
+      });
     }
     const structure =
       existing ??
@@ -377,7 +414,9 @@ export async function addSiblingDiscount(
   }
   const percentBp = percentToBp(raw.percent, "percent");
   return run(deps, actor, async (tx) => {
-    const vh = await tx.voteHead.findUnique({ where: { id: String(raw.voteHeadId ?? "") } });
+    const vh = await tx.voteHead.findUnique({
+      where: { schoolId: actor.schoolId, id: String(raw.voteHeadId ?? "") },
+    });
     if (!vh)
       throw new ValidationError("Choose the vote head the discount applies to.", "voteHeadId");
     const rule = await tx.discountRule.create({
@@ -395,7 +434,10 @@ export async function addSiblingDiscount(
 
 export async function setDiscountActive(deps: Deps, actor: Actor, ruleId: string, active: boolean) {
   return run(deps, actor, async (tx) => {
-    const rule = await tx.discountRule.update({ where: { id: ruleId }, data: { active } });
+    const rule = await tx.discountRule.update({
+      where: { schoolId: actor.schoolId, id: ruleId },
+      data: { active },
+    });
     return {
       result: rule,
       action: active ? "fees.discount.on" : "fees.discount.off",
@@ -435,10 +477,13 @@ export async function addBursary(
     if (!student)
       throw new ValidationError(`No student has admission number ${admission}.`, "admissionNumber");
     const termId = clean(raw.termId);
-    if (termId && !(await tx.term.findUnique({ where: { id: termId } })))
+    if (termId && !(await tx.term.findUnique({ where: { schoolId: actor.schoolId, id: termId } })))
       throw new ValidationError("Choose a term.", "termId");
     const voteHeadId = clean(raw.voteHeadId);
-    if (voteHeadId && !(await tx.voteHead.findUnique({ where: { id: voteHeadId } })))
+    if (
+      voteHeadId &&
+      !(await tx.voteHead.findUnique({ where: { schoolId: actor.schoolId, id: voteHeadId } }))
+    )
       throw new ValidationError("Choose a vote head.", "voteHeadId");
     const bursary = await tx.bursary.create({
       data: {
@@ -475,7 +520,10 @@ export async function addBursary(
 
 export async function endBursary(deps: Deps, actor: Actor, bursaryId: string) {
   return run(deps, actor, async (tx) => {
-    const b = await tx.bursary.update({ where: { id: bursaryId }, data: { active: false } });
+    const b = await tx.bursary.update({
+      where: { schoolId: actor.schoolId, id: bursaryId },
+      data: { active: false },
+    });
     return { result: b, action: "fees.bursary.end", targetType: "bursary", targetId: bursaryId };
   });
 }

@@ -131,7 +131,7 @@ export async function queuePaymentMessages(
   const [school, student] = await Promise.all([
     schoolName(tx, actor.schoolId),
     tx.student.findUniqueOrThrow({
-      where: { id: p.studentId },
+      where: { schoolId: actor.schoolId, id: p.studentId },
       select: { firstName: true, lastName: true, admissionNumber: true },
     }),
   ]);
@@ -395,7 +395,10 @@ async function planReminders(tx: Tx, actor: Actor, studentIds: string[], now: Da
     tx.mpesaSettings.findUnique({ where: { schoolId: actor.schoolId } }).catch(() => null),
   ]);
   const structures = await tx.feeStructure.findMany({
-    where: { id: { in: [...new Set(invoices.map((i) => i.feeStructureId))] } },
+    where: {
+      schoolId: actor.schoolId,
+      id: { in: [...new Set(invoices.map((i) => i.feeStructureId))] },
+    },
     include: { installments: true },
   });
   const owing = students.filter(
@@ -576,12 +579,14 @@ export async function listMessages({ db }: Deps, actor: Actor, f: MessageFilters
     const [students, links, refunds] = await Promise.all([
       tx.student.findMany({
         where: {
+          schoolId: actor.schoolId,
           id: { in: [...new Set(messages.flatMap((m) => (m.studentId ? [m.studentId] : [])))] },
         },
         select: { id: true, firstName: true, lastName: true, admissionNumber: true },
       }),
       tx.guardianLink.findMany({
         where: {
+          schoolId: actor.schoolId,
           id: {
             in: [...new Set(messages.flatMap((m) => (m.guardianLinkId ? [m.guardianLinkId] : [])))],
           },
@@ -590,6 +595,7 @@ export async function listMessages({ db }: Deps, actor: Actor, f: MessageFilters
       }),
       tx.walletEntry.findMany({
         where: {
+          schoolId: actor.schoolId,
           messageId: { in: messages.map((m) => m.id) },
           type: { in: ["refund", "adjustment"] },
         },

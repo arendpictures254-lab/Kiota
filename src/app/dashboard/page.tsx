@@ -27,7 +27,7 @@ async function Dashboard() {
   const supportOn = ctx.school.supportAccessUntil && ctx.school.supportAccessUntil > new Date();
   // Row-level security only returns this person's own notifications.
   const notifications = await db(ctx.dbContext).notification.findMany({
-    where: { readAt: null },
+    where: { schoolId: ctx.school.id, readAt: null },
     orderBy: { createdAt: "desc" },
     take: 5,
   });

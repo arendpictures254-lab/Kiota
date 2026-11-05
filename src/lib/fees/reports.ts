@@ -47,14 +47,18 @@ export async function collectedVsExpected({ db }: Deps, actor: Actor, termId: st
   assertCan(actor.permissions, "fees.reports");
   return withContext(db, ctxOf(actor), async (tx) => {
     const term = await tx.term.findUnique({
-      where: { id: termId },
+      where: { schoolId: actor.schoolId, id: termId },
       include: { academicYear: true },
     });
     if (!term) throw new ValidationError("Choose a term.");
     const [terms, heads, students, lines] = await Promise.all([
-      tx.term.findMany({ select: { id: true, startDate: true, endDate: true } }),
-      tx.voteHead.findMany({ orderBy: { priority: "asc" } }),
+      tx.term.findMany({
+        where: { schoolId: actor.schoolId },
+        select: { id: true, startDate: true, endDate: true },
+      }),
+      tx.voteHead.findMany({ where: { schoolId: actor.schoolId }, orderBy: { priority: "asc" } }),
       tx.student.findMany({
+        where: { schoolId: actor.schoolId },
         select: {
           id: true,
           class: {
@@ -180,20 +184,27 @@ export async function defaulters(
     const ids = balances.map((b) => b.student_id);
     const [students, invoices, links] = await Promise.all([
       tx.student.findMany({
-        where: { id: { in: ids }, status: "active", ...(f.classId ? { classId: f.classId } : {}) },
+        where: {
+          schoolId: actor.schoolId,
+          id: { in: ids },
+          status: "active",
+          ...(f.classId ? { classId: f.classId } : {}),
+        },
         include: { class: true, stream: true },
       }),
       f.termId
-        ? tx.invoice.findMany({ where: { termId: f.termId, studentId: { in: ids } } })
+        ? tx.invoice.findMany({
+            where: { schoolId: actor.schoolId, termId: f.termId, studentId: { in: ids } },
+          })
         : Promise.resolve([]),
       tx.guardianLink.findMany({
-        where: { studentId: { in: ids }, receivesFees: true },
+        where: { schoolId: actor.schoolId, studentId: { in: ids }, receivesFees: true },
         include: { user: { select: { phone: true } } },
       }),
     ]);
     const structures = f.termId
       ? await tx.feeStructure.findMany({
-          where: { termId: f.termId },
+          where: { schoolId: actor.schoolId, termId: f.termId },
           include: { installments: true },
         })
       : [];
@@ -245,17 +256,18 @@ export async function dailyCollection({ db }: Deps, actor: Actor, rawDate: strin
   return withContext(db, ctxOf(actor), async (tx) => {
     const [payments, reversals] = await Promise.all([
       tx.payment.findMany({
-        where: { createdAt: { gte: from, lt: to } },
+        where: { schoolId: actor.schoolId, createdAt: { gte: from, lt: to } },
         include: { receipt: true, reversal: true },
         orderBy: { createdAt: "asc" },
       }),
       tx.reversal.findMany({
-        where: { createdAt: { gte: from, lt: to } },
+        where: { schoolId: actor.schoolId, createdAt: { gte: from, lt: to } },
         include: { payment: { include: { receipt: true } } },
       }),
     ]);
     const students = await tx.student.findMany({
       where: {
+        schoolId: actor.schoolId,
         id: {
           in: [...payments.map((p) => p.studentId), ...reversals.map((r) => r.payment.studentId)],
         },
@@ -312,9 +324,12 @@ export function pledgeStatus(
 export async function listPledges({ db }: Deps, actor: Actor, today = new Date()) {
   if (!actor.permissions.has("fees.reports")) assertCan(actor.permissions, "fees.collect");
   return withContext(db, ctxOf(actor), async (tx) => {
-    const pledges = await tx.pledge.findMany({ orderBy: { dueDate: "asc" } });
+    const pledges = await tx.pledge.findMany({
+      where: { schoolId: actor.schoolId },
+      orderBy: { dueDate: "asc" },
+    });
     const students = await tx.student.findMany({
-      where: { id: { in: pledges.map((p) => p.studentId) } },
+      where: { schoolId: actor.schoolId, id: { in: pledges.map((p) => p.studentId) } },
       select: { id: true, firstName: true, lastName: true, admissionNumber: true },
     });
     const out = [];
@@ -322,6 +337,7 @@ export async function listPledges({ db }: Deps, actor: Actor, today = new Date()
       const endOfDue = new Date(p.dueDate.getTime() + 86_400_000);
       const paid = await tx.payment.aggregate({
         where: {
+          schoolId: actor.schoolId,
           studentId: p.studentId,
           paidAt: { gte: p.createdAt, lt: endOfDue },
           reversal: null,
@@ -399,7 +415,7 @@ export async function cancelPledge({ db }: Deps, actor: Actor, pledgeId: string)
   assertCan(actor.permissions, "fees.collect");
   return withContext(db, ctxOf(actor), async (tx) => {
     const updated = await tx.pledge.updateMany({
-      where: { id: pledgeId, cancelledAt: null },
+      where: { schoolId: actor.schoolId, id: pledgeId, cancelledAt: null },
       data: { cancelledAt: new Date() },
     });
     if (updated.count === 0) throw new ValidationError("Pledge not found.");
@@ -438,22 +454,34 @@ export async function exportFeesWorkbook({ db }: Deps, actor: Actor): Promise<Bu
         terms,
       ] = await Promise.all([
         tx.school.findUniqueOrThrow({ where: { id: actor.schoolId } }),
-        tx.voteHead.findMany({ orderBy: { priority: "asc" } }),
-        tx.student.findMany({ include: { class: true, stream: true } }),
+        tx.voteHead.findMany({ where: { schoolId: actor.schoolId }, orderBy: { priority: "asc" } }),
+        tx.student.findMany({
+          where: { schoolId: actor.schoolId },
+          include: { class: true, stream: true },
+        }),
         tx.payment.findMany({
+          where: { schoolId: actor.schoolId },
           include: { receipt: true, reversal: true },
           orderBy: { createdAt: "asc" },
         }),
         tx.reversal.findMany({
+          where: { schoolId: actor.schoolId },
           include: { payment: { include: { receipt: true } } },
           orderBy: { createdAt: "asc" },
         }),
-        tx.invoice.findMany({ orderBy: { createdAt: "asc" } }),
-        tx.ledgerEntry.findMany({ include: { lines: true }, orderBy: { createdAt: "asc" } }),
-        tx.mpesaTransaction.findMany({ orderBy: { createdAt: "asc" } }),
-        tx.openingBalance.findMany(),
-        tx.pledge.findMany(),
-        tx.term.findMany({ include: { academicYear: true } }),
+        tx.invoice.findMany({ where: { schoolId: actor.schoolId }, orderBy: { createdAt: "asc" } }),
+        tx.ledgerEntry.findMany({
+          where: { schoolId: actor.schoolId },
+          include: { lines: true },
+          orderBy: { createdAt: "asc" },
+        }),
+        tx.mpesaTransaction.findMany({
+          where: { schoolId: actor.schoolId },
+          orderBy: { createdAt: "asc" },
+        }),
+        tx.openingBalance.findMany({ where: { schoolId: actor.schoolId } }),
+        tx.pledge.findMany({ where: { schoolId: actor.schoolId } }),
+        tx.term.findMany({ where: { schoolId: actor.schoolId }, include: { academicYear: true } }),
       ]);
       await audit(tx, {
         schoolId: actor.schoolId,

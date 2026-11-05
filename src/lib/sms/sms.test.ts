@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { whatsappConfigProblem } from "@/lib/whatsapp";
 import { atDeliveryOutcome } from "./africastalking-driver";
-import { smsConfigProblem } from "./index";
+import { type SmsMessage, sendSms, setSmsDriverForTests, smsConfigProblem } from "./index";
 
 describe("SMS settings at start-up", () => {
   it("allow the console driver in development", () => {
@@ -75,5 +75,24 @@ describe("SMS settings at start-up", () => {
         WHATSAPP_APP_SECRET: "s",
       }),
     ).toBeNull();
+  });
+});
+
+describe("sending", () => {
+  it("sends every SMS as plain GSM-7, whatever was typed", async () => {
+    const sent: SmsMessage[] = [];
+    setSmsDriverForTests({
+      name: "test",
+      async send(m) {
+        sent.push(m);
+        return { ok: true, provider: "test", providerMessageId: "1" };
+      },
+    });
+    try {
+      await sendSms({ to: "+254700000000", text: "Bahari: “Sports day” – Friday…" });
+    } finally {
+      setSmsDriverForTests(null);
+    }
+    expect(sent[0].text).toBe('Bahari: "Sports day" - Friday...');
   });
 });

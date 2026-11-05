@@ -88,16 +88,19 @@ type PlannedInvoice = {
 
 export type InvoicePlan = Awaited<ReturnType<typeof computeInvoicePlan>>;
 
-async function computeInvoicePlan(tx: Tx, termId: string) {
-  const term = await tx.term.findUnique({ where: { id: termId }, include: { academicYear: true } });
+async function computeInvoicePlan(tx: Tx, schoolId: string, termId: string) {
+  const term = await tx.term.findUnique({
+    where: { schoolId, id: termId },
+    include: { academicYear: true },
+  });
   if (!term) throw new ValidationError("Choose a term.");
   const [structures, students, invoiced, rules, bursaries, heads] = await Promise.all([
     tx.feeStructure.findMany({
-      where: { termId },
+      where: { schoolId, termId },
       include: { lines: { include: { feeItem: true } }, level: true },
     }),
     tx.student.findMany({
-      where: { status: "active", class: { level: { enabled: true } } },
+      where: { schoolId, status: "active", class: { level: { enabled: true } } },
       select: {
         id: true,
         firstName: true,
@@ -108,14 +111,17 @@ async function computeInvoicePlan(tx: Tx, termId: string) {
         class: { select: { levelId: true, name: true, level: { select: { name: true } } } },
       },
     }),
-    tx.invoice.findMany({ where: { termId }, select: { studentId: true } }),
-    tx.discountRule.findMany({ where: { active: true }, orderBy: { siblingPosition: "desc" } }),
-    tx.bursary.findMany({ where: { active: true, OR: [{ termId: null }, { termId }] } }),
-    voteHeadRefs(tx),
+    tx.invoice.findMany({ where: { schoolId, termId }, select: { studentId: true } }),
+    tx.discountRule.findMany({
+      where: { schoolId, active: true },
+      orderBy: { siblingPosition: "desc" },
+    }),
+    tx.bursary.findMany({ where: { schoolId, active: true, OR: [{ termId: null }, { termId }] } }),
+    voteHeadRefs(tx, schoolId),
   ]);
   const already = new Set(invoiced.map((i) => i.studentId));
   const links = await tx.guardianLink.findMany({
-    where: { studentId: { in: students.map((s) => s.id) } },
+    where: { schoolId, studentId: { in: students.map((s) => s.id) } },
     select: { studentId: true, userId: true },
   });
   const positions = familyPositions(students, links);
@@ -228,7 +234,7 @@ function positionLines(lines: Line[]): Line[] {
 
 export async function previewTermInvoices({ db }: Deps, actor: Actor, termId: string) {
   assertCan(actor.permissions, "fees.setup");
-  return withContext(db, ctxOf(actor), (tx) => computeInvoicePlan(tx, termId));
+  return withContext(db, ctxOf(actor), (tx) => computeInvoicePlan(tx, actor.schoolId, termId));
 }
 
 export async function generateTermInvoices({ db }: Deps, actor: Actor, termId: string) {
@@ -237,7 +243,7 @@ export async function generateTermInvoices({ db }: Deps, actor: Actor, termId: s
     db,
     ctxOf(actor),
     async (tx) => {
-      const plan = await computeInvoicePlan(tx, termId);
+      const plan = await computeInvoicePlan(tx, actor.schoolId, termId);
       if (plan.planned.length === 0)
         throw new ValidationError("There are no students left to invoice for this term.");
 
@@ -288,6 +294,7 @@ export async function generateTermInvoices({ db }: Deps, actor: Actor, termId: s
       // Earlier credit (overpayments) pays the new invoices straight away.
       const positions = await studentPositions(
         tx,
+        actor.schoolId,
         plan.planned.map((p) => p.studentId),
       );
       for (const p of plan.planned) {
@@ -333,12 +340,14 @@ export async function generateTermInvoices({ db }: Deps, actor: Actor, termId: s
 // Opening balances (from the Excel import)
 // ---------------------------------------------------------------------------
 
-async function openingPlan(tx: Tx) {
+async function openingPlan(tx: Tx, schoolId: string) {
   const rows = await tx.openingBalance.findMany({
-    where: { posted: false },
+    where: { schoolId, posted: false },
     include: { student: { select: { firstName: true, lastName: true, admissionNumber: true } } },
   });
-  const arrears = await tx.voteHead.findFirst({ where: { isArrears: true } });
+  const arrears = await tx.voteHead.findFirst({
+    where: { schoolId, isArrears: true },
+  });
   return {
     rows,
     arrears,
@@ -349,7 +358,7 @@ async function openingPlan(tx: Tx) {
 
 export async function previewOpeningBalances({ db }: Deps, actor: Actor) {
   assertCan(actor.permissions, "fees.setup");
-  return withContext(db, ctxOf(actor), openingPlan);
+  return withContext(db, ctxOf(actor), (tx) => openingPlan(tx, actor.schoolId));
 }
 
 /** Post every unposted opening balance as the student's first ledger entry. Once only. */
@@ -359,7 +368,7 @@ export async function postOpeningBalances({ db }: Deps, actor: Actor) {
     db,
     ctxOf(actor),
     async (tx) => {
-      const plan = await openingPlan(tx);
+      const plan = await openingPlan(tx, actor.schoolId);
       if (plan.rows.length === 0)
         throw new ValidationError("There are no opening balances waiting to be posted.");
       if (!plan.arrears)
@@ -381,7 +390,11 @@ export async function postOpeningBalances({ db }: Deps, actor: Actor) {
       await postEntries(tx, entries);
       // The staging rows are frozen from now on (a database trigger refuses later changes).
       const marked = await tx.openingBalance.updateMany({
-        where: { posted: false, studentId: { in: plan.rows.map((r) => r.studentId) } },
+        where: {
+          schoolId: actor.schoolId,
+          posted: false,
+          studentId: { in: plan.rows.map((r) => r.studentId) },
+        },
         data: { posted: true },
       });
       if (marked.count !== plan.rows.length)
@@ -444,7 +457,9 @@ export async function addCharge(
     });
     if (!student)
       throw new ValidationError(`No student has admission number ${admission}.`, "admissionNumber");
-    const vh = await tx.voteHead.findUnique({ where: { id: String(raw.voteHeadId ?? "") } });
+    const vh = await tx.voteHead.findUnique({
+      where: { schoolId: actor.schoolId, id: String(raw.voteHeadId ?? "") },
+    });
     if (!vh) throw new ValidationError("Choose the vote head.", "voteHeadId");
     const termId = clean(raw.termId);
     const entry = await postEntry(tx, {

@@ -67,6 +67,7 @@ export async function listStudents({ db }: Deps, actor: Actor, filters: StudentF
   assertCanView(actor);
   const q = clean(filters.q);
   const where: Prisma.StudentWhereInput = {
+    schoolId: actor.schoolId,
     ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
     ...(!filters.status ? { status: "active" } : {}),
     ...(filters.classId ? { classId: filters.classId } : {}),
@@ -106,7 +107,7 @@ export async function getStudent({ db }: Deps, actor: Actor, studentId: string) 
   assertCanView(actor);
   return withContext(db, ctxOf(actor), async (tx) => {
     const student = await tx.student.findUnique({
-      where: { id: studentId },
+      where: { schoolId: actor.schoolId, id: studentId },
       include: {
         class: { include: { level: true } },
         stream: true,
@@ -125,7 +126,7 @@ export async function getStudent({ db }: Deps, actor: Actor, studentId: string) 
     if (!student) return null;
     // Row-level security returns nothing here without students.medical.view.
     const medical = actor.permissions.has("students.medical.view")
-      ? await tx.studentMedical.findUnique({ where: { studentId } })
+      ? await tx.studentMedical.findUnique({ where: { schoolId: actor.schoolId, studentId } })
       : null;
     return { ...student, medical };
   });
@@ -247,10 +248,11 @@ export function parseGuardianInput(raw: Record<string, unknown>, prefix = ""): G
 /** Check class, stream and house belong together and to this school (RLS hides others). */
 async function checkPlacement(
   tx: Tx,
+  schoolId: string,
   input: Pick<StudentInput, "classId" | "streamId" | "houseId">,
 ) {
   const cls = await tx.class.findUnique({
-    where: { id: input.classId },
+    where: { schoolId, id: input.classId },
     include: { level: true, streams: true },
   });
   if (!cls || !cls.level.enabled) throw new ValidationError("Choose a class.", "classId");
@@ -260,7 +262,7 @@ async function checkPlacement(
   if (!input.streamId && cls.streams.length > 0) {
     throw new ValidationError(`Choose a stream of ${cls.name}.`, "streamId");
   }
-  if (input.houseId && !(await tx.house.findUnique({ where: { id: input.houseId } }))) {
+  if (input.houseId && !(await tx.house.findUnique({ where: { schoolId, id: input.houseId } }))) {
     throw new ValidationError("Choose a house.", "houseId");
   }
   return cls;
@@ -297,13 +299,16 @@ function studentSnapshot(s: {
 }
 
 /** Link a guardian through the database function (reuses the platform identity by phone). */
-export async function linkGuardian(tx: Tx, studentId: string, g: GuardianInput) {
+export async function linkGuardian(tx: Tx, schoolId: string, studentId: string, g: GuardianInput) {
   const [row] = await tx.$queryRaw<{ link_id: string; created: boolean }[]>`
     SELECT * FROM app_upsert_guardian_link(
       ${studentId}::uuid, ${g.phone}, ${g.name}, ${g.relationship}, ${g.language},
       ${g.receivesFees}, ${g.receivesAcademics}, ${g.receivesBoarding}, ${g.authorisedToCollect})`;
   if (g.whatsapp !== undefined) {
-    await tx.guardianLink.update({ where: { id: row.link_id }, data: { whatsapp: g.whatsapp } });
+    await tx.guardianLink.update({
+      where: { schoolId, id: row.link_id },
+      data: { whatsapp: g.whatsapp },
+    });
   }
   return { linkId: row.link_id, created: row.created };
 }
@@ -323,7 +328,7 @@ export async function createStudent(
   }
 
   return withContext(db, ctxOf(actor), async (tx) => {
-    await checkPlacement(tx, input);
+    await checkPlacement(tx, actor.schoolId, input);
     const exists = await tx.student.findUnique({
       where: {
         schoolId_admissionNumber: {
@@ -377,7 +382,7 @@ export async function createStudent(
         },
       });
     }
-    for (const g of guardians) await linkGuardian(tx, student.id, g);
+    for (const g of guardians) await linkGuardian(tx, actor.schoolId, student.id, g);
 
     await audit(tx, {
       schoolId: actor.schoolId,
@@ -409,9 +414,11 @@ export async function updateStudent(
   assertCan(actor.permissions, "students.edit");
   const canMedical = actor.permissions.has("students.medical.view");
   await withContext(db, ctxOf(actor), async (tx) => {
-    const before = await tx.student.findUnique({ where: { id: studentId } });
+    const before = await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: studentId },
+    });
     if (!before) throw new ValidationError("Student not found.");
-    await checkPlacement(tx, input);
+    await checkPlacement(tx, actor.schoolId, input);
     if (input.admissionNumber !== before.admissionNumber) {
       const clash = await tx.student.findUnique({
         where: {
@@ -429,7 +436,7 @@ export async function updateStudent(
       }
     }
     const after = await tx.student.update({
-      where: { id: studentId },
+      where: { schoolId: actor.schoolId, id: studentId },
       data: {
         admissionNumber: input.admissionNumber,
         upi: input.upi,
@@ -448,7 +455,9 @@ export async function updateStudent(
 
     let medicalChanged = false;
     if (canMedical) {
-      const existing = await tx.studentMedical.findUnique({ where: { studentId } });
+      const existing = await tx.studentMedical.findUnique({
+        where: { schoolId: actor.schoolId, studentId },
+      });
       if (
         (existing?.medicalNotes ?? null) !== input.medicalNotes ||
         (existing?.allergies ?? null) !== input.allergies
@@ -496,12 +505,14 @@ export async function changeStudentStatus(
   if (status !== "active" && !reason) throw new ValidationError("Give a reason.", "reason");
 
   await withContext(db, ctxOf(actor), async (tx) => {
-    const student = await tx.student.findUnique({ where: { id: studentId } });
+    const student = await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: studentId },
+    });
     if (!student) throw new ValidationError("Student not found.");
     if (student.status === status)
       throw new ValidationError(`The student is already ${status}.`, "status");
     await tx.student.update({
-      where: { id: studentId },
+      where: { schoolId: actor.schoolId, id: studentId },
       data: { status, statusDate: date, statusReason: reason },
     });
     await tx.studentStatusChange.create({
@@ -536,9 +547,11 @@ export async function addGuardian(
 ): Promise<void> {
   assertCan(actor.permissions, "students.edit");
   await withContext(db, ctxOf(actor), async (tx) => {
-    const student = await tx.student.findUnique({ where: { id: studentId } });
+    const student = await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: studentId },
+    });
     if (!student) throw new ValidationError("Student not found.");
-    const { linkId, created } = await linkGuardian(tx, studentId, g);
+    const { linkId, created } = await linkGuardian(tx, actor.schoolId, studentId, g);
     await audit(tx, {
       schoolId: actor.schoolId,
       actorId: actor.userId,
@@ -559,9 +572,11 @@ export async function updateGuardian(
 ): Promise<void> {
   assertCan(actor.permissions, "students.edit");
   await withContext(db, ctxOf(actor), async (tx) => {
-    const before = await tx.guardianLink.findUnique({ where: { id: linkId } });
+    const before = await tx.guardianLink.findUnique({
+      where: { schoolId: actor.schoolId, id: linkId },
+    });
     if (!before) throw new ValidationError("Guardian not found.");
-    await tx.guardianLink.update({ where: { id: linkId }, data: g });
+    await tx.guardianLink.update({ where: { schoolId: actor.schoolId, id: linkId }, data: g });
     await audit(tx, {
       schoolId: actor.schoolId,
       actorId: actor.userId,
@@ -587,9 +602,11 @@ export async function updateGuardian(
 export async function removeGuardian({ db }: Deps, actor: Actor, linkId: string): Promise<void> {
   assertCan(actor.permissions, "students.edit");
   await withContext(db, ctxOf(actor), async (tx) => {
-    const link = await tx.guardianLink.findUnique({ where: { id: linkId } });
+    const link = await tx.guardianLink.findUnique({
+      where: { schoolId: actor.schoolId, id: linkId },
+    });
     if (!link) throw new ValidationError("Guardian not found.");
-    await tx.guardianLink.delete({ where: { id: linkId } });
+    await tx.guardianLink.delete({ where: { schoolId: actor.schoolId, id: linkId } });
     await audit(tx, {
       schoolId: actor.schoolId,
       actorId: actor.userId,
@@ -625,11 +642,16 @@ export async function setStudentPhoto(
   assertCan(actor.permissions, "students.edit");
   checkUpload(file, IMAGE_TYPES);
   await withContext(db, ctxOf(actor), async (tx) => {
-    const student = await tx.student.findUnique({ where: { id: studentId } });
+    const student = await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: studentId },
+    });
     if (!student) throw new ValidationError("Student not found.");
     const key = schoolKey(actor.schoolId, "students", studentId, `photo-${Date.now()}`);
     await getStorage().put(key, file.bytes, file.type);
-    await tx.student.update({ where: { id: studentId }, data: { photoKey: key } });
+    await tx.student.update({
+      where: { schoolId: actor.schoolId, id: studentId },
+      data: { photoKey: key },
+    });
     await audit(tx, {
       schoolId: actor.schoolId,
       actorId: actor.userId,
@@ -655,7 +677,9 @@ export async function addStudentDocument(
   if (!kind) throw new ValidationError("Say what the document is.", "kind");
   checkUpload(file, DOCUMENT_TYPES);
   await withContext(db, ctxOf(actor), async (tx) => {
-    const student = await tx.student.findUnique({ where: { id: studentId } });
+    const student = await tx.student.findUnique({
+      where: { schoolId: actor.schoolId, id: studentId },
+    });
     if (!student) throw new ValidationError("Student not found.");
     const key = schoolKey(actor.schoolId, "students", studentId, "documents", `${Date.now()}`);
     await getStorage().put(key, file.bytes, file.type);
@@ -693,21 +717,29 @@ export async function setStudentSubjects(
   assertCan(actor.permissions, "students.edit");
   await withContext(db, ctxOf(actor), async (tx) => {
     const student = await tx.student.findUnique({
-      where: { id: studentId },
+      where: { schoolId: actor.schoolId, id: studentId },
       include: { class: true, subjects: true },
     });
     if (!student) throw new ValidationError("Student not found.");
     const levelId = student.class.levelId;
-    if (pathwayId && !(await tx.pathway.findFirst({ where: { id: pathwayId, levelId } }))) {
+    if (
+      pathwayId &&
+      !(await tx.pathway.findFirst({ where: { schoolId: actor.schoolId, id: pathwayId, levelId } }))
+    ) {
       throw new ValidationError("Choose a pathway for this level.", "pathwayId");
     }
     const unique = [...new Set(subjectIds)];
-    const valid = await tx.subject.count({ where: { id: { in: unique }, levelId } });
+    const valid = await tx.subject.count({
+      where: { schoolId: actor.schoolId, id: { in: unique }, levelId },
+    });
     if (valid !== unique.length)
       throw new ValidationError("Choose subjects for this level.", "subjects");
 
-    await tx.student.update({ where: { id: studentId }, data: { pathwayId } });
-    await tx.studentSubject.deleteMany({ where: { studentId } });
+    await tx.student.update({
+      where: { schoolId: actor.schoolId, id: studentId },
+      data: { pathwayId },
+    });
+    await tx.studentSubject.deleteMany({ where: { schoolId: actor.schoolId, studentId } });
     await tx.studentSubject.createMany({
       data: unique.map((subjectId) => ({ schoolId: actor.schoolId, studentId, subjectId })),
     });
@@ -737,9 +769,14 @@ export async function readStudentFile(
   assertCanView(actor);
   const key = await withContext(db, ctxOf(actor), async (tx) => {
     if ("photo" in which) {
-      return (await tx.student.findUnique({ where: { id: studentId } }))?.photoKey ?? null;
+      return (
+        (await tx.student.findUnique({ where: { schoolId: actor.schoolId, id: studentId } }))
+          ?.photoKey ?? null
+      );
     }
-    const doc = await tx.studentDocument.findFirst({ where: { id: which.documentId, studentId } });
+    const doc = await tx.studentDocument.findFirst({
+      where: { schoolId: actor.schoolId, id: which.documentId, studentId },
+    });
     return doc?.fileKey ?? null;
   });
   if (!key || !key.startsWith(`schools/${actor.schoolId}/`)) return null;

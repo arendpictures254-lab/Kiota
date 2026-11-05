@@ -23,25 +23,25 @@ export type PromotionPlan = {
   warnings: string[];
 };
 
-async function computePlan(tx: Tx, classId: string): Promise<PromotionPlan> {
+async function computePlan(tx: Tx, schoolId: string, classId: string): Promise<PromotionPlan> {
   const cls = await tx.class.findUnique({
-    where: { id: classId },
+    where: { schoolId, id: classId },
     include: { level: true, streams: true },
   });
   if (!cls) throw new ValidationError("Choose a class.");
 
   let next = await tx.class.findFirst({
-    where: { levelId: cls.levelId, position: { gt: cls.position } },
+    where: { schoolId, levelId: cls.levelId, position: { gt: cls.position } },
     orderBy: { position: "asc" },
     include: { streams: true },
   });
   if (!next && cls.level.nextLevelKey) {
     const nextLevel = await tx.level.findFirst({
-      where: { key: cls.level.nextLevelKey, enabled: true },
+      where: { schoolId, key: cls.level.nextLevelKey, enabled: true },
     });
     if (nextLevel) {
       next = await tx.class.findFirst({
-        where: { levelId: nextLevel.id },
+        where: { schoolId, levelId: nextLevel.id },
         orderBy: { position: "asc" },
         include: { streams: true },
       });
@@ -50,7 +50,7 @@ async function computePlan(tx: Tx, classId: string): Promise<PromotionPlan> {
 
   const groups = await tx.student.groupBy({
     by: ["streamId"],
-    where: { classId, status: "active" },
+    where: { schoolId, classId, status: "active" },
     _count: { _all: true },
   });
   const streamName = (id: string | null) => cls.streams.find((s) => s.id === id)?.name ?? null;
@@ -71,7 +71,9 @@ async function computePlan(tx: Tx, classId: string): Promise<PromotionPlan> {
   const total = moves.reduce((n, m) => n + m.count, 0);
   if (total === 0) warnings.push(`${cls.name} has no active students to promote.`);
   if (next) {
-    const waiting = await tx.student.count({ where: { classId: next.id, status: "active" } });
+    const waiting = await tx.student.count({
+      where: { schoolId, classId: next.id, status: "active" },
+    });
     if (waiting > 0) {
       warnings.push(
         `${next.name} still has ${waiting} active students. Promote ${next.name} first, ` +
@@ -96,7 +98,7 @@ async function computePlan(tx: Tx, classId: string): Promise<PromotionPlan> {
 export async function previewPromotion({ db }: Deps, actor: Actor, classId: string) {
   assertCan(actor.permissions, "structure.manage");
   assertCan(actor.permissions, "students.edit");
-  return withContext(db, ctxOf(actor), (tx) => computePlan(tx, classId));
+  return withContext(db, ctxOf(actor), (tx) => computePlan(tx, actor.schoolId, classId));
 }
 
 export async function promoteClass(
@@ -111,14 +113,14 @@ export async function promoteClass(
     db,
     ctxOf(actor),
     async (tx) => {
-      const plan = await computePlan(tx, classId);
+      const plan = await computePlan(tx, actor.schoolId, classId);
       if (plan.total === 0) throw new ValidationError(plan.warnings[0]);
       if (!options.allowMixing && plan.warnings.some((w) => w.includes("still has"))) {
         throw new ValidationError(plan.warnings.find((w) => w.includes("still has"))!);
       }
       const today = new Date();
       const students = await tx.student.findMany({
-        where: { classId, status: "active" },
+        where: { schoolId: actor.schoolId, classId, status: "active" },
         include: { stream: true },
       });
 
@@ -129,7 +131,10 @@ export async function promoteClass(
           if (!m.toStream) continue;
           const stream =
             (await tx.stream.findUnique({
-              where: { classId_name: { classId: toClassId, name: m.toStream } },
+              where: {
+                schoolId: actor.schoolId,
+                classId_name: { classId: toClassId, name: m.toStream },
+              },
             })) ??
             (await tx.stream.create({
               data: { schoolId: actor.schoolId, classId: toClassId, name: m.toStream },
@@ -137,13 +142,13 @@ export async function promoteClass(
           streamIds.set(m.toStream, stream.id);
         }
         const [from, to] = await Promise.all([
-          tx.class.findUniqueOrThrow({ where: { id: classId } }),
-          tx.class.findUniqueOrThrow({ where: { id: toClassId } }),
+          tx.class.findUniqueOrThrow({ where: { schoolId: actor.schoolId, id: classId } }),
+          tx.class.findUniqueOrThrow({ where: { schoolId: actor.schoolId, id: toClassId } }),
         ]);
         const newLevel = from.levelId !== to.levelId;
         for (const s of students) {
           await tx.student.update({
-            where: { id: s.id },
+            where: { schoolId: actor.schoolId, id: s.id },
             data: {
               classId: toClassId,
               streamId: s.stream ? (streamIds.get(s.stream.name) ?? null) : null,
@@ -154,13 +159,13 @@ export async function promoteClass(
         }
         if (newLevel) {
           await tx.studentSubject.deleteMany({
-            where: { studentId: { in: students.map((s) => s.id) } },
+            where: { schoolId: actor.schoolId, studentId: { in: students.map((s) => s.id) } },
           });
         }
       } else {
         for (const s of students) {
           await tx.student.update({
-            where: { id: s.id },
+            where: { schoolId: actor.schoolId, id: s.id },
             data: {
               status: "graduated",
               statusDate: today,

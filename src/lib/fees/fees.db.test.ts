@@ -5,6 +5,7 @@ import { scopedDb, withContext } from "@/lib/db-core";
 import type { Actor } from "@/lib/service-kit";
 import {
   app,
+  appUnguarded,
   makeMember,
   makeSchool,
   makeStream,
@@ -122,7 +123,7 @@ const pay = (
 
 async function position(actor: Actor, studentId: string) {
   return withContext(app, { userId: actor.userId, schoolId: actor.schoolId }, (tx) =>
-    studentPosition(tx, studentId),
+    studentPosition(tx, actor.schoolId, studentId),
   );
 }
 
@@ -264,7 +265,7 @@ describe("reversals", () => {
       /append-only/,
     );
     await expect(
-      withContext(app, { userId: f.bursar.userId, schoolId: f.school.id }, (tx) =>
+      withContext(appUnguarded, { userId: f.bursar.userId, schoolId: f.school.id }, (tx) =>
         tx.payment.update({ where: { id: payment.id }, data: { amountCents: 1 } }),
       ),
     ).rejects.toThrow(/permission denied/i);
@@ -378,7 +379,7 @@ describe("school walls for money", () => {
     const b = await feesSchool("Money B");
     const s = await boarder(a.school.id, a.stream.id);
     const { payment } = await pay(a.bursar, s.id, "1234");
-    const db = scopedDb(app, { userId: b.bursar.userId, schoolId: b.school.id });
+    const db = scopedDb(appUnguarded, { userId: b.bursar.userId, schoolId: b.school.id });
     expect(await db.payment.findMany({ where: { id: payment.id } })).toEqual([]);
     expect(await db.receipt.findMany({ where: { paymentId: payment.id } })).toEqual([]);
     expect(await db.ledgerEntry.findMany({ where: { studentId: s.id } })).toEqual([]);
