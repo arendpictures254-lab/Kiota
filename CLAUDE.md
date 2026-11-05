@@ -61,6 +61,11 @@ src/lib/fees/                 Fees: allocation.ts (pure ledger maths), ledger.ts
 src/lib/mpesa/                Daraja interface (daraja.ts), simulator, service.ts (callbacks, STK)
 src/app/api/pay/[token]/      Public Daraja callback routes (secret token in the URL)
 src/app/r/[token]/            Public receipt share link (unknown links: 404 from src/proxy.ts)
+src/app/parent/               Parent portal (children, fees, pay, notices, confirm a school)
+src/app/choose/, account/     Staff-or-parent choice; account (language, sessions)
+src/lib/portal/               Parent portal service (all reads through app_parent_* functions)
+src/lib/i18n/                 Parent-facing strings: en.ts, sw.ts (one file per language)
+src/lib/db-guard.ts           School-wall guard for Prisma queries (development and tests)
 src/lib/messaging/            Messaging: units.ts (SMS units), templates, outbox (plan, reserve,
                               queue), service.ts (payments, reminders, notices, log), worker.ts
                               (sending, delivery reports, refunds), wallet.ts (top-ups, admin)
@@ -92,6 +97,7 @@ scripts/create-admin.ts       Creates an Arend admin (docs/deploy.md)
 Dockerfile, docker-compose.prod.yml, deploy/   Single-server production setup (docs/deploy.md)
 docs/launch-checklist.md      Everything that must happen before launch. Add to it.
 docs/messaging.md             Messaging, and what Africa's Talking, Meta and Safaricom must provide
+docs/parent-portal.md         Parent portal, and how to try it on a phone over Wi-Fi
 scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
@@ -146,6 +152,11 @@ has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
   once (unique transaction ID), confirm with Daraja before posting, and run as the school's hidden
   "Automatic payments" member (role `system_payments`). Credentials are encrypted with
   `CREDENTIALS_ENCRYPTION_KEY` (src/lib/crypto.ts). Test with `npm run mpesa:simulate`.
+- **Parents** have no school context. Every portal read goes through a `SECURITY DEFINER`
+  function that starts from the caller's own guardian link (`kiota_parent_link`); a link waiting
+  for confirmation shows only the school's name and the child's first name. Never give a parent a
+  school context or read school tables for them directly. Parent-facing text goes through
+  `src/lib/i18n` (keys in en.ts and sw.ts), never inline strings.
 - **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost
   is reserved in the append-only `wallet_entries` when queued, kept on delivery, refunded on
   failure. Sign-in codes and Kiota's own alerts use `sendPlatformSms()` (Kiota's sender ID, never
@@ -215,6 +226,7 @@ npm run samples        # rebuild docs/samples/*.xlsx after changing import colum
 npm run mpesa:simulate -- c2b --account BA/2025/001 --amount 5000   # fake M-Pesa (docs/mpesa.md)
 npm run mpesa:simulate -- topup                                      # complete a wallet top-up
 npm run sms:simulate                                                 # fake SMS delivery reports
+npm run dev:phone                                                    # try it on a phone over Wi-Fi
 ```
 
 Checks (run before every commit; Postgres must be running):

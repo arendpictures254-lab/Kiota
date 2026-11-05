@@ -60,5 +60,7 @@ test("unknown numbers are told to ask their school", async ({ page }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Phone number").fill("0799999999");
   await page.getByRole("button", { name: "Send code" }).click();
-  await expect(page.getByText("We don't recognise this number")).toBeVisible();
+  await expect(
+    page.getByText("Your school hasn't added this number yet. Please contact the school."),
+  ).toBeVisible();
 });

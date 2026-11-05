@@ -26,5 +26,20 @@ export default async function globalSetup() {
   await owner.connect();
   await owner.query("DELETE FROM otp_codes");
   await owner.query("DELETE FROM demo_requests");
+  // The parent portal journey confirms Wanjiku's Milima child: make it wait again every run,
+  // and keep her in English.
+  await owner.query(`
+    UPDATE parent_link_confirmations SET status = 'pending', confirmed_at = NULL, declined_at = NULL
+    WHERE guardian_link_id IN (
+      SELECT g.id FROM guardian_links g JOIN users u ON u.id = g.user_id
+      JOIN schools s ON s.id = g.school_id
+      WHERE u.phone = '+254744000001' AND s.name = 'Milima School')`);
+  await owner.query(
+    "UPDATE users SET preferred_language = 'en' WHERE phone IN ('+254744000001', '+254711000003')",
+  );
+  await owner.query(
+    "UPDATE guardian_links SET language = 'en' WHERE user_id IN (SELECT id FROM users WHERE phone = '+254744000001')",
+  );
+  await owner.query("DELETE FROM sessions");
   await owner.end();
 }

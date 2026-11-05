@@ -29,7 +29,8 @@ import {
 import { countSms, toPlainSms } from "./units";
 import { ensureMessagingMember } from "./system";
 
-export type Category = "fees" | "academics" | "boarding" | "general";
+/** "account": about the parent's Kiota account (the portal invitation); reaches every guardian. */
+export type Category = "fees" | "academics" | "boarding" | "general" | "account";
 
 export type Recipient = {
   guardianLinkId: string | null;
@@ -299,6 +300,8 @@ export function categoryFilter(category: Category) {
       return { receivesAcademics: true };
     case "boarding":
       return { receivesBoarding: true };
+    case "account":
+      return {};
     default:
       return { OR: [{ receivesAcademics: true }, { receivesBoarding: true }] };
   }
@@ -307,7 +310,13 @@ export function categoryFilter(category: Category) {
 /** Guardians of the given students who want this category of message, one row per link. */
 export async function guardianRecipients(
   tx: Tx,
-  where: { schoolId: string; studentIds?: string[]; students?: object },
+  where: {
+    schoolId: string;
+    studentIds?: string[];
+    students?: object;
+    /** Only guardians who have never signed in to the parent portal. */
+    notSignedIn?: boolean;
+  },
   category: Category,
 ): Promise<Recipient[]> {
   const links = await tx.guardianLink.findMany({
@@ -315,6 +324,7 @@ export async function guardianRecipients(
       // Row-level security scopes this too; the explicit filter is the first wall.
       schoolId: where.schoolId,
       ...categoryFilter(category),
+      ...(where.notSignedIn ? { portalFirstSeenAt: null } : {}),
       ...(where.studentIds ? { studentId: { in: where.studentIds } } : {}),
       student: { status: "active", ...(where.students ?? {}) },
     },

@@ -31,13 +31,31 @@ const nextConfig: NextConfig = {
     ],
   },
   // The app runs on app.localhost:3000 in development, next to the site on localhost:3000.
-  allowedDevOrigins: ["app.localhost", "localhost"],
+  allowedDevOrigins: [
+    "app.localhost",
+    "localhost",
+    // npm run dev:phone adds this computer's Wi-Fi address, for trying it on a real phone.
+    ...(process.env.KIOTA_DEV_ORIGINS?.split(",").filter(Boolean) ?? []),
+  ],
   cacheComponents: true,
   experimental: {
     // Student photos, documents and Excel imports (each limited to 5 MB in the services).
     serverActions: { bodySizeLimit: "6mb" },
   },
   partialPrefetching: true,
+  // The service worker (installable app, offline page): never cached, so updates arrive at once.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

@@ -25,7 +25,7 @@ import { type DarajaCredentials, darajaDriver, parseDarajaTime } from "./daraja"
 
 export const SYSTEM_PHONE = "system:payments";
 const SYSTEM_ROLE = "system_payments";
-const MAX_STK_SHILLINGS = 250_000;
+export const MAX_STK_SHILLINGS = 250_000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,8 +81,8 @@ const systemPermissions = effectivePermissions({
   grants: [],
 });
 
-/** The school's hidden automatic-payments member, used to run callbacks. */
-async function systemActor(db: PrismaClient, schoolId: string): Promise<Actor> {
+/** The school's hidden automatic-payments member, used to run callbacks and portal payments. */
+export async function systemActor(db: PrismaClient, schoolId: string): Promise<Actor> {
   const [row] = await db.$queryRaw<
     { id: string | null }[]
   >`SELECT app_auth_user_id(${SYSTEM_PHONE}) AS id`;
@@ -628,6 +628,8 @@ export async function sendStkPush(
   { db }: Deps,
   actor: Actor,
   raw: { studentId: unknown; phone: unknown; amount: unknown },
+  /** A parent who started it from the parent portal: they may follow its outcome. */
+  opts: { portalUserId?: string } = {},
 ) {
   assertCan(actor.permissions, "fees.collect");
   const phone = normalizePhone(String(raw.phone ?? ""));
@@ -671,6 +673,7 @@ export async function sendStkPush(
         billRef: student.admissionNumber,
         studentId: student.id,
         requestedById: actor.userId,
+        portalUserId: opts.portalUserId ?? null,
         status: "stk_requested",
         raw: { merchantRequestId: res.merchantRequestId },
       },
@@ -681,7 +684,12 @@ export async function sendStkPush(
       action: "fees.mpesa.stk",
       targetType: "student",
       targetId: student.id,
-      after: { phone, amountCents: amount * 100, checkoutRequestId: res.checkoutRequestId },
+      after: {
+        phone,
+        amountCents: amount * 100,
+        checkoutRequestId: res.checkoutRequestId,
+        ...(opts.portalUserId ? { fromParentPortal: opts.portalUserId } : {}),
+      },
       ip: actor.ip,
     });
     return { id: row.id, message: res.customerMessage };

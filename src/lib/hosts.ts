@@ -21,7 +21,18 @@ export const SITE_PAGES = [
 ];
 
 /** App paths that must never be served on the site address. */
-export const APP_PREFIXES = ["/sign-in", "/dashboard", "/schools", "/admin", "/files", "/r"];
+export const APP_PREFIXES = [
+  "/sign-in",
+  "/dashboard",
+  "/schools",
+  "/admin",
+  "/files",
+  "/r",
+  "/parent",
+  "/choose",
+  "/account",
+  "/offline",
+];
 
 export const WHATSAPP_URL = "https://wa.me/254720942426";
 export const WHATSAPP_DISPLAY = "+254 720 942 426";

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { ButtonLink, Card, Loading } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { kes } from "@/lib/fees/allocation";
-import { canSendNotices } from "@/lib/messaging/service";
+import { canSendNotices, noticeReadCounts } from "@/lib/messaging/service";
 import { walletOverview } from "@/lib/messaging/wallet";
 import { MessagesShell, loadMessagesActor } from "./shared";
 
@@ -24,6 +24,12 @@ async function Hub() {
   const { actor } = await loadMessagesActor();
   const w = await walletOverview(deps, actor);
   const low = w.balanceCents < w.lowBalanceThresholdCents;
+  const notices = w.campaigns.filter((c) => c.kind === "notice").slice(0, 5);
+  const reads = await noticeReadCounts(
+    deps,
+    actor,
+    notices.map((n) => n.id),
+  );
   const links: [string, string, string, boolean][] = [
     [
       "/dashboard/messages/log",
@@ -32,6 +38,12 @@ async function Hub() {
       true,
     ],
     ["/dashboard/messages/wallet", "Wallet", "Top up, usage per month, cost per message", true],
+    [
+      "/dashboard/messages/invite",
+      "Invite parents to Kiota",
+      "Send the sign-in invitation, and see who has signed in",
+      canSendNotices(actor.permissions),
+    ],
     [
       "/dashboard/fees/reports?view=defaulters",
       "Fee reminders",
@@ -72,6 +84,29 @@ async function Hub() {
             </li>
           ))}
       </ul>
+      {notices.length ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-heading text-lg font-bold">Recent notices</h2>
+          <ul className="flex flex-col gap-2">
+            {notices.map((n) => (
+              <li key={n.id}>
+                <Link
+                  href={`/dashboard/messages/log?campaign=${n.id}`}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-4"
+                >
+                  <span className="min-w-0 truncate text-ink">{n.title}</span>
+                  <span className="shrink-0 text-sm text-ink/60" data-testid="read-count">
+                    Read by {reads.get(n.id) ?? 0} of {n.recipients}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-ink/60">
+            “Read” counts parents who opened the notice in the parent portal.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

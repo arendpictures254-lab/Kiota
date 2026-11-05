@@ -19,6 +19,7 @@ export type CurrentUser = {
   name: string;
   phone: string;
   isPlatformAdmin: boolean;
+  preferredLanguage: "en" | "sw";
 };
 
 export type SchoolContext = {
@@ -46,10 +47,22 @@ export type MySchool = {
  */
 export async function getMe(userId: string) {
   const [me] = await db({ userId, schoolId: null }).$queryRaw<
-    { id: string; name: string; phone: string; is_platform_admin: boolean }[]
+    {
+      id: string;
+      name: string;
+      phone: string;
+      is_platform_admin: boolean;
+      preferred_language: string;
+    }[]
   >`SELECT * FROM app_me()`;
   return me
-    ? { id: me.id, name: me.name, phone: me.phone, isPlatformAdmin: me.is_platform_admin }
+    ? {
+        id: me.id,
+        name: me.name,
+        phone: me.phone,
+        isPlatformAdmin: me.is_platform_admin,
+        preferredLanguage: me.preferred_language === "sw" ? ("sw" as const) : ("en" as const),
+      }
     : null;
 }
 
@@ -124,12 +137,23 @@ export const getSchoolContext = cache(async (): Promise<SchoolContext | null> =>
 /** For pages: the school context, or a redirect to sign in / pick a school. */
 export async function requireSchool(): Promise<SchoolContext> {
   const user = await requireUser();
+  // Someone who is both staff and a parent, working as a parent: staff pages wait.
+  if (user.session.mode === "parent") redirect("/parent");
   const ctx = await getSchoolContext();
   if (!ctx) {
     if (user.session.schoolId) await setSessionSchool(user.session.id, null);
-    redirect(user.isPlatformAdmin ? "/admin" : "/schools");
+    if (user.isPlatformAdmin) redirect("/admin");
+    const schools = await listMySchools(user.id);
+    redirect(schools.length === 0 && (await hasChildren(user.id)) ? "/parent" : "/schools");
   }
   return ctx;
+}
+
+/** Whether the user is a parent of any child (pending links included). */
+export async function hasChildren(userId: string): Promise<boolean> {
+  const [row] = await db({ userId, schoolId: null }).$queryRaw<{ any: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM app_my_children()) AS any`;
+  return row?.any === true;
 }
 
 /** For server actions and pages: require a permission in the current school. */

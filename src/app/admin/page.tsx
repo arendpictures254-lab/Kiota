@@ -5,6 +5,8 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { ButtonLink, Loading, Notice, Shell } from "@/components/ui";
 import { requireUser } from "@/lib/auth/context";
 import { db } from "@/lib/db";
+import { MODULES } from "@/lib/staff/service";
+import { setModulesAction } from "./actions";
 
 export const metadata: Metadata = { title: "Arend Studio admin · Kiota" };
 
@@ -26,7 +28,14 @@ async function Schools({ searchParams }: Pick<PageProps<"/admin">, "searchParams
   // RLS lets admins list schools, but never read their data (unless support access is on).
   const schools = await db({ userId: user.id, schoolId: null }).school.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, county: true, status: true, supportAccessUntil: true },
+    select: {
+      id: true,
+      name: true,
+      county: true,
+      status: true,
+      supportAccessUntil: true,
+      modules: true,
+    },
   });
   const now = new Date();
 
@@ -50,6 +59,32 @@ async function Schools({ searchParams }: Pick<PageProps<"/admin">, "searchParams
               {s.county} · {s.status}
               {s.supportAccessUntil && s.supportAccessUntil > now ? " · support access on" : ""}
             </p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-semibold text-teal">
+                Modules: {s.modules.length ? s.modules.join(", ") : "core only"}
+              </summary>
+              <form action={setModulesAction} className="mt-2 flex flex-col gap-2">
+                <input type="hidden" name="schoolId" value={s.id} />
+                {MODULES.map((m) => (
+                  <label key={m.key} className="flex min-h-11 items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      name="modules"
+                      value={m.key}
+                      defaultChecked={s.modules.includes(m.key)}
+                      className="size-5 accent-teal"
+                    />
+                    {m.label}
+                  </label>
+                ))}
+                <button
+                  type="submit"
+                  className="h-11 rounded-xl border border-teal/30 bg-white px-4 text-sm font-semibold text-teal"
+                >
+                  Save modules
+                </button>
+              </form>
+            </details>
           </li>
         ))}
       </ul>

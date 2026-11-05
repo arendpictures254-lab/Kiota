@@ -548,6 +548,200 @@ export async function sendFeeReminders(
 }
 
 // ---------------------------------------------------------------------------
+// Inviting parents to the portal
+// ---------------------------------------------------------------------------
+
+export type InviteInput = { audience: string; onlyNew: boolean };
+
+export function parseInviteInput(raw: Record<string, unknown>): InviteInput {
+  const audience = clean(raw.audience);
+  if (!audience) throw new ValidationError("Choose who to invite.", "audience");
+  return {
+    audience,
+    onlyNew: raw.onlyNew === "on" || raw.onlyNew === "true" || raw.onlyNew === true,
+  };
+}
+
+async function planInvite(tx: Tx, actor: Actor, input: InviteInput) {
+  const target = await resolveAudience(tx, actor.schoolId, input.audience);
+  const recipients = onePerPhone(
+    await guardianRecipients(
+      tx,
+      { schoolId: actor.schoolId, students: target.where, notSignedIn: input.onlyNew },
+      "account",
+    ),
+  );
+  const school = await schoolName(tx, actor.schoolId);
+  const drafts: Draft[] = recipients.map((r) => ({
+    recipient: r,
+    templateKey: "parent_invite",
+    channel: "sms",
+    vars: { school, link: shortLink("") },
+  }));
+  const plan = await planDrafts(tx, actor.schoolId, drafts);
+  return { ...plan, target };
+}
+
+export async function previewInvite(
+  { db }: Deps,
+  actor: Actor,
+  input: InviteInput,
+  now = new Date(),
+) {
+  assertCan(actor.permissions, "messages.send");
+  return withContext(db, ctxOf(actor), async (tx) => {
+    const { planned, wallet, balanceCents, target } = await planInvite(tx, actor, input);
+    return {
+      ...preview(
+        summarise(planned),
+        balanceCents,
+        wallet.overdraftLimitCents,
+        false,
+        planned[0]?.body ?? null,
+        now,
+      ),
+      audienceLabel: target.label,
+    };
+  });
+}
+
+/** Send the invitation. `expectedCostCents` is the cost the person saw; a different one is refused. */
+export async function sendInvite(
+  { db }: Deps,
+  actor: Actor,
+  input: InviteInput,
+  expectedCostCents: number | null,
+  now = new Date(),
+) {
+  assertCan(actor.permissions, "messages.send");
+  return withContext(db, ctxOf(actor), async (tx) => {
+    const { planned, wallet, balanceCents, target } = await planInvite(tx, actor, input);
+    const summary = summarise(planned);
+    if (summary.recipients === 0)
+      throw new ValidationError(
+        "Nobody to invite: every parent in this group has signed in already, or has no phone.",
+      );
+    if (expectedCostCents !== null && expectedCostCents !== summary.costCents) {
+      throw new CostChangedError(
+        preview(
+          summary,
+          balanceCents,
+          wallet.overdraftLimitCents,
+          false,
+          planned[0]?.body ?? null,
+          now,
+        ),
+      );
+    }
+    const campaign = await tx.messageCampaign.create({
+      data: {
+        schoolId: actor.schoolId,
+        kind: "invite",
+        title: `Portal invitation: ${target.label}`,
+        audience: { value: input.audience, label: target.label, onlyNew: input.onlyNew },
+        channel: "sms",
+        category: "account",
+        recipients: summary.recipients,
+        units: summary.units,
+        costCents: summary.costCents,
+        createdById: actor.userId,
+      },
+    });
+    const result = await queuePlanned(tx, {
+      schoolId: actor.schoolId,
+      planned,
+      mode: "all",
+      now,
+      createdById: actor.userId,
+      campaignId: campaign.id,
+    });
+    await audit(tx, {
+      schoolId: actor.schoolId,
+      actorId: actor.userId,
+      action: "messages.invite",
+      targetType: "message_campaign",
+      targetId: campaign.id,
+      after: {
+        audience: target.label,
+        onlyNew: input.onlyNew,
+        recipients: summary.recipients,
+        units: summary.units,
+        costCents: summary.costCents,
+      },
+      ip: actor.ip,
+    });
+    return { campaignId: campaign.id, ...result, recipients: summary.recipients };
+  });
+}
+
+/** Who has signed in to the parent portal at least once, so the school can follow up. */
+export async function portalSignIns({ db }: Deps, actor: Actor, audience = "school") {
+  assertCan(actor.permissions, "messages.send");
+  return withContext(db, ctxOf(actor), async (tx) => {
+    const target = await resolveAudience(tx, actor.schoolId, audience);
+    const links = await tx.guardianLink.findMany({
+      where: { schoolId: actor.schoolId, student: { status: "active", ...target.where } },
+      select: {
+        id: true,
+        name: true,
+        portalFirstSeenAt: true,
+        user: { select: { phone: true } },
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            class: { select: { name: true } },
+            stream: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ portalFirstSeenAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
+    });
+    // One row per parent (by phone): a parent of two children signs in once.
+    const byPhone = new Map<string, (typeof links)[number] & { children: string[] }>();
+    for (const l of links) {
+      const label = `${l.student.firstName} ${l.student.lastName} (${l.student.class.name}${l.student.stream ? ` ${l.student.stream.name}` : ""})`;
+      const seen = byPhone.get(l.user.phone);
+      if (seen) {
+        seen.children.push(label);
+        if (
+          l.portalFirstSeenAt &&
+          (!seen.portalFirstSeenAt || l.portalFirstSeenAt < seen.portalFirstSeenAt)
+        )
+          seen.portalFirstSeenAt = l.portalFirstSeenAt;
+      } else byPhone.set(l.user.phone, { ...l, children: [label] });
+    }
+    const rows = [...byPhone.values()].map((r) => ({
+      linkId: r.id,
+      name: r.name,
+      phone: r.user.phone,
+      children: r.children,
+      signedInAt: r.portalFirstSeenAt,
+    }));
+    return {
+      audienceLabel: target.label,
+      rows,
+      signedIn: rows.filter((r) => r.signedInAt).length,
+      total: rows.length,
+    };
+  });
+}
+
+/** How many parents read each notice in the portal (the school's read receipts). */
+export async function noticeReadCounts({ db }: Deps, actor: Actor, campaignIds: string[]) {
+  if (campaignIds.length === 0) return new Map<string, number>();
+  const rows = await withContext(db, ctxOf(actor), (tx) =>
+    tx.noticeRead.groupBy({
+      by: ["campaignId"],
+      where: { schoolId: actor.schoolId, campaignId: { in: campaignIds } },
+      _count: { _all: true },
+    }),
+  );
+  return new Map(rows.map((r) => [r.campaignId, r._count._all]));
+}
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 

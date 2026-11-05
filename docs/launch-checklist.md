@@ -97,6 +97,27 @@ Details and exact settings: docs/messaging.md. These depend on third parties and
 - [ ] **`QUIET_HOURS` is not "off"** and `ALLOW_CONSOLE_SMS` / `KIOTA_DEMO` are not set in
       production.
 
+## Parent portal
+
+Details: docs/parent-portal.md.
+
+- [ ] **Native-speaker review of the Kiswahili text**: every string in `src/lib/i18n/sw.ts` (portal,
+      sign-in, account), the Kiswahili SMS templates (`message_templates`, language "sw") and the
+      offline page. They were written without a native speaker's check.
+- [ ] **Test on the pilot parents' kind of phone**: a mid-range Android, Chrome, over Safaricom
+      mobile data. Automated budget: the parent home shows in under 5 s on emulated slow 3G
+      (measured: 1.4 s and 246 KB with an empty cache).
+- [ ] **Install to the home screen on staging (https)**: check the icon, the name "Kiota", the
+      teal bar and the offline page. Not testable over plain http.
+- [ ] **Decide how long sessions last** for parents (30 days today, same as staff), and whether
+      "Sign out everywhere" should also notify the parent by SMS.
+- [ ] **Send the portal invitation on opening day** (Messages → Invite parents), then follow up
+      with parents who have not signed in after a week.
+- [ ] **Confirm with the pilot school** what a sponsor and other guardians should see (the
+      guardian settings decide it), and which modules to switch on as they are built.
+- [ ] **Receipt share links** never expire and the portal links to them (see "Before real money
+      flows"): decide before launch.
+
 ## Public website
 
 - [ ] **Lawyer review of the privacy policy and terms** (kiota.app/privacy and /terms are marked

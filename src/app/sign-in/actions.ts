@@ -1,12 +1,16 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { audit } from "@/lib/audit";
 import { clientIp, getMe, listMySchools } from "@/lib/auth/context";
 import { createOtpService } from "@/lib/auth/otp";
-import { createSession, setSessionSchool } from "@/lib/auth/session";
+import { createSession, setSessionMode, setSessionSchool } from "@/lib/auth/session";
 import { inContext, platformDb } from "@/lib/db";
+import { LOCALE_COOKIE, isLocale } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { normalizePhone } from "@/lib/phone";
+import { homeFor, myChildren, recordParentSignIn } from "@/lib/portal/service";
 import { sendPlatformSms } from "@/lib/sms";
 
 export type SignInState = {
@@ -23,11 +27,12 @@ function otp() {
 }
 
 export async function signInAction(_prev: SignInState, form: FormData): Promise<SignInState> {
+  const { t } = await getT();
   const intent = String(form.get("intent") ?? "send");
   const phone = normalizePhone(String(form.get("phone") ?? ""));
 
   if (!phone) {
-    return { step: "phone", error: "Enter your phone number, like 0712 345 678." };
+    return { step: "phone", error: t("signin.badPhone") };
   }
 
   if (intent === "send" || intent === "resend") {
@@ -36,26 +41,26 @@ export async function signInAction(_prev: SignInState, form: FormData): Promise<
       return {
         step: intent === "resend" ? "code" : "phone",
         phone,
-        error:
-          result.reason === "unknown_phone"
-            ? "We don't recognise this number. Ask your school to add you to Kiota."
-            : "Too many codes requested. Wait 15 minutes, then try again.",
+        // No self sign-up: a number no school has added is told to contact the school.
+        error: result.reason === "unknown_phone" ? t("signin.unknown") : t("signin.rateLimited"),
       };
     }
-    return { step: "code", phone, message: "We sent a 6-digit code by SMS." };
+    return { step: "code", phone, message: t("signin.sent") };
   }
 
   const code = String(form.get("code") ?? "").replace(/\D/g, "");
-  if (code.length !== 6) return { step: "code", phone, error: "Enter the 6-digit code." };
+  if (code.length !== 6) return { step: "code", phone, error: t("signin.enterSix") };
 
   const result = await otp().verifyCode(phone, code);
   if (!result.ok) {
     const error =
       result.reason === "wrong_code"
-        ? `That code is not right. ${result.attemptsLeft} ${result.attemptsLeft === 1 ? "try" : "tries"} left.`
+        ? result.attemptsLeft === 1
+          ? t("signin.wrongOne")
+          : t("signin.wrongMany", { n: result.attemptsLeft })
         : result.reason === "too_many_attempts"
-          ? "Too many wrong tries. Ask for a new code."
-          : "That code has expired. Ask for a new code.";
+          ? t("signin.tooMany")
+          : t("signin.expired");
     return { step: "code", phone, error };
   }
 
@@ -66,11 +71,36 @@ export async function signInAction(_prev: SignInState, form: FormData): Promise<
     audit(tx, { schoolId: null, actorId: userId, action: "auth.sign_in", ip }),
   );
 
-  const [schools, me] = await Promise.all([listMySchools(userId), getMe(userId)]);
-  if (schools.length === 1) {
+  const deps = { db: platformDb };
+  const [schools, me, children] = await Promise.all([
+    listMySchools(userId),
+    getMe(userId),
+    myChildren(deps, userId),
+  ]);
+  if (children.length) await recordParentSignIn(deps, userId);
+  const home = homeFor({
+    staffSchools: schools.length,
+    isPlatformAdmin: !!me?.isPlatformAdmin,
+    hasChildren: children.length > 0,
+    mode: null,
+  });
+  if (home === "/parent") await setSessionMode(session.id, "parent");
+  if (home === "/dashboard") {
+    await setSessionMode(session.id, "staff");
     await setSessionSchool(session.id, schools[0].school_id);
-    redirect("/dashboard");
   }
-  if (schools.length === 0 && me?.isPlatformAdmin) redirect("/admin");
-  redirect("/schools");
+  redirect(home);
+}
+
+/** The language switch on the sign-in page (before anyone is signed in). */
+export async function setSignInLanguageAction(form: FormData): Promise<void> {
+  const lang = String(form.get("lang") ?? "");
+  if (isLocale(lang)) {
+    (await cookies()).set(LOCALE_COOKIE, lang, {
+      path: "/",
+      sameSite: "lax",
+      maxAge: 365 * 24 * 3600,
+    });
+  }
+  redirect("/sign-in");
 }

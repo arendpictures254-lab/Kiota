@@ -315,3 +315,26 @@ export async function createSchool(
   );
   return { schoolId: id, directorPhone };
 }
+
+export const MODULES = [
+  { key: "academics", label: "Academics (report cards)" },
+  { key: "boarding", label: "Boarding (leave-outs)" },
+  { key: "pocket_money", label: "Pocket money" },
+] as const;
+
+/** Arend admin: switch optional modules on for a school (the parent portal shows them). */
+export async function setSchoolModules(
+  { db }: Deps,
+  admin: { userId: string; isPlatformAdmin: boolean; ip?: string | null },
+  schoolId: string,
+  modules: string[],
+) {
+  if (!admin.isPlatformAdmin) throw new ForbiddenError("platform.admin");
+  if (!/^[0-9a-f-]{36}$/i.test(schoolId)) throw new ValidationError("School not found.");
+  await withContext(
+    db,
+    { userId: admin.userId, schoolId: null },
+    (tx) =>
+      tx.$executeRaw`SELECT app_admin_set_school_modules(${schoolId}::uuid, ${modules}::text[], ${admin.ip ?? null})`,
+  );
+}

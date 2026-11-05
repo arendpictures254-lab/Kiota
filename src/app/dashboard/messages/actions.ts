@@ -5,7 +5,14 @@ import { type FormState, attempt, currentActor, deps, formObject } from "@/lib/a
 import { kes } from "@/lib/fees/allocation";
 import { type SendState, toPreviewView } from "@/lib/messaging/preview-view";
 import { sendStep } from "@/lib/messaging/send-step";
-import { parseNoticeInput, previewNotice, sendNotice } from "@/lib/messaging/service";
+import {
+  parseInviteInput,
+  parseNoticeInput,
+  previewInvite,
+  previewNotice,
+  sendInvite,
+  sendNotice,
+} from "@/lib/messaging/service";
 import { requestWalletTopup, retryTopup, setLowBalanceThreshold } from "@/lib/messaging/wallet";
 import { kickMessageWorker } from "@/lib/messaging/worker-loop";
 
@@ -26,6 +33,23 @@ export async function noticeAction(_s: SendState, form: FormData): Promise<SendS
       };
     }
     const p = await previewNotice(deps, actor, input);
+    return { preview: toPreviewView(p, `To: ${p.audienceLabel}`) };
+  });
+}
+
+export async function inviteAction(_s: SendState, form: FormData): Promise<SendState> {
+  return sendStep(async () => {
+    const actor = await currentActor();
+    const input = parseInviteInput(formObject(form));
+    if (form.get("step") === "send") {
+      const r = await sendInvite(deps, actor, input, Number(form.get("expectedCost") ?? NaN));
+      kickMessageWorker();
+      done();
+      return {
+        ok: `Inviting ${r.recipients} parent${r.recipients === 1 ? "" : "s"} (${kes(r.costCents)}). Follow it in Message history.`,
+      };
+    }
+    const p = await previewInvite(deps, actor, input);
     return { preview: toPreviewView(p, `To: ${p.audienceLabel}`) };
   });
 }

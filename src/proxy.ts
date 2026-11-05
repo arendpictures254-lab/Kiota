@@ -92,6 +92,6 @@ export function proxy(req: NextRequest): NextResponse | Promise<NextResponse> {
 export const config = {
   // Static files, metadata images and the health check skip the proxy.
   matcher: [
-    "/((?!_next/|api/health|api/pay/|api/hooks/|brand/|favicon\\.ico|icon|apple-icon|opengraph-image|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
+    "/((?!_next/|api/health|api/pay/|api/hooks/|brand/|sw\\.js|favicon\\.ico|icon|apple-icon|opengraph-image|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
   ],
 };

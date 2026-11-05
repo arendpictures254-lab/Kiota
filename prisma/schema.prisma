@@ -38,17 +38,22 @@ model School {
   status             SchoolStatus @default(pilot)
   /// Arend Studio support may see this school's data until this time. Null = off.
   supportAccessUntil DateTime?    @map("support_access_until") @db.Timestamptz(3)
+  /// Optional modules switched on for the school: "academics", "boarding", "pocket_money".
+  modules            String[]     @default([])
   createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships   Membership[]
-  roles         Role[]
-  levels        Level[]
-  houses        House[]
-  dormitories   Dormitory[]
-  academicYears AcademicYear[]
-  importBatches ImportBatch[]
-  voteHeads     VoteHead[]
+  memberships      Membership[]
+  roles            Role[]
+  levels           Level[]
+  houses           House[]
+  dormitories      Dormitory[]
+  academicYears    AcademicYear[]
+  importBatches    ImportBatch[]
+  voteHeads        VoteHead[]
+  wallet           Wallet?
+  messageCampaigns MessageCampaign[]
+  messages         Message[]
 
   @@map("schools")
 }
@@ -56,15 +61,17 @@ model School {
 /// One platform-level identity per person, keyed on a verified phone number (E.164).
 /// Row-level security: a user sees themselves and members of the current school.
 model User {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// E.164, e.g. +254712345678
-  phone           String   @unique
-  email           String?
-  name            String
+  phone             String   @unique
+  email             String?
+  name              String
   /// Arend Studio admin. Platform-level only: grants no access to any school's data.
-  isPlatformAdmin Boolean  @default(false) @map("is_platform_admin")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  isPlatformAdmin   Boolean  @default(false) @map("is_platform_admin")
+  /// The language this person chose for Kiota itself (parent portal, sign-in).
+  preferredLanguage Language @default(en) @map("preferred_language")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships   Membership[]
   sessions      Session[]
@@ -89,13 +96,18 @@ model OtpCode {
 
 /// Signed-in sessions. The cookie holds a random token; only its hash is stored.
 model Session {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tokenHash String   @unique @map("token_hash")
-  userId    String   @map("user_id") @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  userId     String    @map("user_id") @db.Uuid
   /// The school the user chose to open. Null until chosen.
-  schoolId  String?  @map("school_id") @db.Uuid
-  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  schoolId   String?   @map("school_id") @db.Uuid
+  /// "staff" or "parent", for people who are both. Null until chosen.
+  mode       String?
+  /// The browser, for "signed in on other devices".
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -549,6 +561,8 @@ model GuardianLink {
   authorisedToCollect Boolean              @default(false) @map("authorised_to_collect")
   /// The school says this phone number uses WhatsApp (messages may go there, SMS as fallback).
   whatsapp            Boolean              @default(false)
+  /// When the parent first signed in to the portal while linked here (the school follows up).
+  portalFirstSeenAt   DateTime?            @map("portal_first_seen_at") @db.Timestamptz(3)
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -569,6 +583,7 @@ model ParentLinkConfirmation {
   status         String    @default("pending")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   confirmedAt    DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  declinedAt     DateTime? @map("declined_at") @db.Timestamptz(3)
 
   link GuardianLink @relation(fields: [guardianLinkId], references: [id], onDelete: Cascade)
 
@@ -992,6 +1007,8 @@ model MpesaTransaction {
   transTime         DateTime? @map("trans_time") @db.Timestamptz(3)
   studentId         String?   @map("student_id") @db.Uuid
   requestedById     String?   @map("requested_by_id") @db.Uuid
+  /// A parent who started this prompt from the parent portal (they may see its outcome).
+  portalUserId      String?   @map("portal_user_id") @db.Uuid
   /// stk_requested, pending_verification, posted, suspense, assigned, rejected, failed
   status            String
   statusDetail      String?   @map("status_detail")
@@ -1042,6 +1059,10 @@ model Wallet {
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  school  School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  entries WalletEntry[]
+  topups  WalletTopup[]
+
   @@map("wallets")
 }
 
@@ -1072,6 +1093,7 @@ model WalletEntry {
   topupId     String?         @unique @map("topup_id") @db.Uuid
   createdById String?         @map("created_by_id") @db.Uuid
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  wallet      Wallet          @relation(fields: [schoolId], references: [schoolId], onDelete: Restrict)
 
   /// One reserve, one refund and one adjustment per message at most.
   @@unique([messageId, type])
@@ -1100,6 +1122,7 @@ model WalletTopup {
   completedAt       DateTime? @map("completed_at") @db.Timestamptz(3)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  wallet            Wallet    @relation(fields: [schoolId], references: [schoolId], onDelete: Restrict)
 
   @@index([schoolId, createdAt])
   @@map("wallet_topups")
@@ -1150,6 +1173,7 @@ model MessageCampaign {
   costCents   Int            @map("cost_cents")
   createdById String         @map("created_by_id") @db.Uuid
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@index([schoolId, createdAt])
   @@map("message_campaigns")
@@ -1195,6 +1219,7 @@ model Message {
   deliveredAt       DateTime?      @map("delivered_at") @db.Timestamptz(3)
   failedAt          DateTime?      @map("failed_at") @db.Timestamptz(3)
   updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  school            School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@unique([provider, providerMessageId])
   @@index([schoolId, createdAt])
@@ -1203,4 +1228,16 @@ model Message {
   @@index([guardianLinkId])
   @@index([campaignId])
   @@map("messages")
+}
+
+/// Who read which notice in the parent portal (the school sees read counts per notice).
+model NoticeRead {
+  schoolId   String   @map("school_id") @db.Uuid
+  campaignId String   @map("campaign_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  readAt     DateTime @default(now()) @map("read_at") @db.Timestamptz(3)
+
+  @@id([campaignId, userId])
+  @@index([schoolId, campaignId])
+  @@map("notice_reads")
 }

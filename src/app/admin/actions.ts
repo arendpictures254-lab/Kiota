@@ -6,7 +6,7 @@ import { clientIp, requireUser } from "@/lib/auth/context";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { platformDb } from "@/lib/db";
 import { sendPlatformSms } from "@/lib/sms";
-import { ValidationError, createSchool } from "@/lib/staff/service";
+import { ValidationError, createSchool, setSchoolModules } from "@/lib/staff/service";
 
 export type CreateSchoolState = { error?: string; field?: string };
 
@@ -40,4 +40,15 @@ export async function createSchoolAction(
   }
   revalidatePath("/admin");
   redirect("/admin?created=1");
+}
+
+export async function setModulesAction(form: FormData): Promise<void> {
+  const user = await requireUser();
+  await setSchoolModules(
+    { db: platformDb },
+    { userId: user.id, isPlatformAdmin: user.isPlatformAdmin, ip: await clientIp() },
+    String(form.get("schoolId") ?? ""),
+    form.getAll("modules").map(String),
+  );
+  revalidatePath("/admin");
 }

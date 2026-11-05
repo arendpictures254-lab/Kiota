@@ -2,24 +2,45 @@
 
 import { useActionState } from "react";
 import { Button, Field, Notice } from "@/components/ui";
+import type { MessageKey } from "@/lib/i18n/en";
 import { formatPhone } from "@/lib/phone";
 import { signInAction, type SignInState } from "./actions";
 
 const initial: SignInState = { step: "phone" };
 
-export function SignInForm() {
+type Text = Record<
+  Extract<
+    MessageKey,
+    | "signin.phone"
+    | "signin.phoneHint"
+    | "signin.send"
+    | "signin.sending"
+    | "signin.enterCode"
+    | "signin.code"
+    | "signin.signIn"
+    | "signin.checking"
+    | "signin.resend"
+    | "signin.otherNumber"
+  >,
+  string
+>;
+
+export function SignInForm({ text }: { text: Text }) {
   const [state, action, pending] = useActionState(signInAction, initial);
 
   if (state.step === "code" && state.phone) {
+    const [before, after] = text["signin.enterCode"].split("{phone}");
     return (
       <form action={action} className="flex flex-col gap-4">
         <input type="hidden" name="phone" value={state.phone} />
         <p className="text-ink/80">
-          Enter the code sent to <strong>{formatPhone(state.phone)}</strong>.
+          {before}
+          <strong>{formatPhone(state.phone)}</strong>
+          {after}
         </p>
         {state.message && !state.error ? <Notice tone="success">{state.message}</Notice> : null}
         <Field
-          label="6-digit code"
+          label={text["signin.code"]}
           name="code"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -30,13 +51,13 @@ export function SignInForm() {
           error={state.error}
         />
         <Button type="submit" name="intent" value="verify" disabled={pending}>
-          {pending ? "Checking…" : "Sign in"}
+          {pending ? text["signin.checking"] : text["signin.signIn"]}
         </Button>
         <Button type="submit" name="intent" value="resend" variant="secondary" disabled={pending}>
-          Send a new code
+          {text["signin.resend"]}
         </Button>
         <a href="/sign-in" className="text-center text-sm font-semibold text-teal">
-          Use a different number
+          {text["signin.otherNumber"]}
         </a>
       </form>
     );
@@ -45,7 +66,7 @@ export function SignInForm() {
   return (
     <form action={action} className="flex flex-col gap-4">
       <Field
-        label="Phone number"
+        label={text["signin.phone"]}
         name="phone"
         type="tel"
         inputMode="tel"
@@ -55,10 +76,10 @@ export function SignInForm() {
         autoFocus
         required
         error={state.error}
-        hint="We'll send you a code by SMS. No password needed."
+        hint={text["signin.phoneHint"]}
       />
       <Button type="submit" name="intent" value="send" disabled={pending}>
-        {pending ? "Sending…" : "Send code"}
+        {pending ? text["signin.sending"] : text["signin.send"]}
       </Button>
     </form>
   );

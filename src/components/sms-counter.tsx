@@ -41,7 +41,8 @@ export function SmsCounter({
             .map((ch) => (ch.trim() ? `“${ch}”` : "special spaces"))
             .slice(0, 5)
             .join(" ")}{" "}
-          will be sent as plain characters (&apos; &quot; - ...), so the message still fits 160 per SMS.
+          will be sent as plain characters (&apos; &quot; - ...), so the message still fits 160 per
+          SMS.
         </p>
       ) : null}
       {c.encoding === "Unicode" ? (

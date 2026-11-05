@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Syne } from "next/font/google";
 import { SITE_URL } from "@/lib/hosts";
+import { ServiceWorker } from "@/components/service-worker";
 import "./globals.css";
 
 const syne = Syne({
@@ -36,7 +37,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${syne.variable} ${dmSans.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }
