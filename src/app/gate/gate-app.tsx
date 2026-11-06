@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GatePass } from "@/lib/leaveout/gate";
+import type { GateCardResult } from "@/lib/idcards/service";
+import { isCardToken, parseCard, verifyCard } from "@/lib/idcards/card-token";
 import { parsePass, pickupCodeHash, verifyPass } from "@/lib/leaveout/pass-token";
 import { REASON_TEXT, type Verdict, passVerdict, timeOfDay, whenText } from "@/lib/leaveout/rules";
 import { decodeFile, decodeQr, preloadDecoder } from "./decode";
@@ -15,7 +17,14 @@ import {
   saveBundle,
 } from "./gate-store";
 
-type Shown = { pass: GatePass | null; verdict: Verdict; note?: string };
+type CardStudent = {
+  name: string;
+  admissionNumber: string;
+  classLabel: string;
+  boarder: boolean;
+  photo: string | null;
+};
+type Shown = { pass: GatePass | null; verdict: Verdict; note?: string; card?: CardStudent };
 
 const bigButton =
   "flex h-16 w-full items-center justify-center rounded-2xl px-5 text-xl font-bold disabled:opacity-50";
@@ -111,7 +120,10 @@ export function GateApp({ schoolName }: { schoolName: string }) {
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
     const t1 = setInterval(() => void sync(), 30_000);
-    const t2 = setInterval(() => void refresh(), 5 * 60_000);
+    // Fresh passes every 5 minutes while online (offline, the phone keeps what it has).
+    const t2 = setInterval(() => {
+      if (navigator.onLine) void refresh();
+    }, 5 * 60_000);
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
@@ -135,18 +147,60 @@ export function GateApp({ schoolName }: { schoolName: string }) {
   );
 
   const show = useCallback(
-    (pass: GatePass | null, note?: string, forced?: Verdict) => {
+    (pass: GatePass | null, note?: string, forced?: Verdict, card?: CardStudent) => {
       const p = pass ? withQueue(pass) : null;
-      setShown({ pass: p, verdict: forced ?? passVerdict(p, new Date()), note });
+      setShown({
+        pass: p,
+        verdict: forced ?? passVerdict(p, new Date(), bundle?.earlyExitMinutes),
+        note,
+        card,
+      });
       setCode("");
       setMessage(null);
       setView("result");
     },
-    [withQueue],
+    [withQueue, bundle],
+  );
+
+  /** A student's ID card instead of a pass: who it is, and their leave-out if they have one. */
+  const handleCard = useCallback(
+    async (token: string) => {
+      const notFound: Verdict = { valid: false, reason: "not_found" };
+      const c = parseCard(token);
+      if (!c) return show(null, "This is not a Kiota card.", notFound);
+      if (bundle && c.schoolId !== bundle.school.id)
+        return show(null, "This card is for another school.", notFound);
+      if (bundle?.publicKey && (await verifyCard(token, bundle.publicKey)) === "invalid")
+        return show(null, "Forged or damaged card: the signature does not match.", notFound);
+      let r: GateCardResult | null = null;
+      if (navigator.onLine) {
+        try {
+          const res = await fetch(`/api/gate/card?token=${encodeURIComponent(token)}`, {
+            cache: "no-store",
+          });
+          if (res.ok) r = (await res.json()) as GateCardResult;
+        } catch {
+          // offline after all
+        }
+      }
+      if (!r) return show(null, undefined, { valid: false, reason: "cannot_check" });
+      if (!r.found) return show(null, "This card is not known to Kiota.", notFound);
+      if (!r.live)
+        return show(
+          null,
+          "This card was replaced (lost or reissued): it no longer works.",
+          notFound,
+          r.student,
+        );
+      if (r.pass) return show(r.pass, undefined, undefined, r.student);
+      show(null, undefined, { valid: false, reason: "no_leaveout" }, r.student);
+    },
+    [bundle, show],
   );
 
   const handleToken = useCallback(
     async (token: string) => {
+      if (isCardToken(token)) return handleCard(token);
       const parsed = parsePass(token);
       const notFound: Verdict = { valid: false, reason: "not_found" };
       if (!parsed) return show(null, "This is not a Kiota pass.", notFound);
@@ -155,29 +209,29 @@ export function GateApp({ schoolName }: { schoolName: string }) {
       if (bundle?.publicKey && (await verifyPass(token, bundle.publicKey)) === "invalid")
         return show(null, "Forged or damaged pass: the signature does not match.", notFound);
       let pass = bundle?.passes.find((p) => p.id === parsed.leaveoutId) ?? null;
+      let askedServer = false;
       if (navigator.onLine) {
         try {
           const res = await fetch(`/api/gate/pass?token=${encodeURIComponent(token)}`, {
             cache: "no-store",
           });
-          if (res.ok) pass = ((await res.json()) as { pass: GatePass | null }).pass;
+          if (res.ok) {
+            pass = ((await res.json()) as { pass: GatePass | null }).pass;
+            askedServer = true;
+          }
         } catch {
           // use the downloaded copy
         }
       }
       if (pass && pass.nonce && pass.nonce !== parsed.nonce)
         return show(null, "An old pass: a newer one was issued for this leave-out.", notFound);
-      if (!pass)
-        return show(
-          null,
-          bundle?.publicKey
-            ? "A genuine pass, but it is not on this phone. Connect to the internet and scan again."
-            : undefined,
-          notFound,
-        );
+      // Not on the phone and no answer from the server: we don't know, so we don't refuse.
+      if (!pass && !askedServer)
+        return show(null, undefined, { valid: false, reason: "cannot_check" });
+      if (!pass) return show(null, undefined, notFound);
       show(pass);
     },
-    [bundle, show],
+    [bundle, show, handleCard],
   );
 
   // ---- Camera ----
@@ -323,7 +377,7 @@ export function GateApp({ schoolName }: { schoolName: string }) {
         </span>
         <span>
           {bundle
-            ? `${bundle.passes.length} passes · updated ${timeOfDay(bundle.generatedAt)}`
+            ? `${bundle.passes.length} passes · Last updated ${timeOfDay(bundle.generatedAt)}`
             : "No passes yet"}
         </span>
         {queue.length ? (
@@ -401,9 +455,17 @@ export function GateApp({ schoolName }: { schoolName: string }) {
         <section className="flex flex-col gap-4" aria-label="Pass">
           <div
             data-testid="verdict"
-            className={`rounded-2xl p-5 text-center ${v.valid ? "bg-status-paid" : "bg-status-overdue"} text-white`}
+            className={`rounded-2xl p-5 text-center ${
+              v.valid
+                ? "bg-status-paid text-white"
+                : v.reason === "cannot_check"
+                  ? "bg-status-due text-ink"
+                  : "bg-status-overdue text-white"
+            }`}
           >
-            <p className="font-heading text-4xl font-bold">{v.valid ? "VALID" : "NOT VALID"}</p>
+            <p className="font-heading text-4xl font-bold">
+              {v.valid ? "VALID" : v.reason === "cannot_check" ? "CAN'T CHECK" : "NOT VALID"}
+            </p>
             <p className="text-xl font-semibold">
               {v.valid
                 ? v.action === "exit"
@@ -448,6 +510,33 @@ export function GateApp({ schoolName }: { schoolName: string }) {
                   </>
                 ) : null}
               </dl>
+            </div>
+          ) : null}
+          {!p && shown?.card ? (
+            <div
+              className="flex flex-col gap-3 rounded-2xl bg-white p-4"
+              data-testid="card-student"
+            >
+              {shown.card.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the student's photo, from the server
+                <img
+                  src={shown.card.photo}
+                  alt={shown.card.name}
+                  className="max-h-80 w-full rounded-xl object-cover"
+                />
+              ) : (
+                <p className="rounded-xl bg-status-due/15 p-4 text-center font-semibold text-status-due">
+                  No photo on file
+                </p>
+              )}
+              <p className="text-sm font-semibold tracking-wide text-ink/60 uppercase">
+                Student ID card
+              </p>
+              <p className="font-heading text-3xl leading-tight font-bold">{shown.card.name}</p>
+              <p className="text-xl">
+                {shown.card.classLabel} · {shown.card.admissionNumber} ·{" "}
+                {shown.card.boarder ? "Boarder" : "Day scholar"}
+              </p>
             </div>
           ) : null}
           {p && v.valid && v.action === "exit" ? (

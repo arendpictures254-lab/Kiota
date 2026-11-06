@@ -294,6 +294,7 @@ describe("what a guardian may see", () => {
       reportCards: false,
       leaveOuts: false,
       pocketMoney: false,
+      attendance: false,
     });
     expect(await childFees(deps, s.id, link.id)).not.toBeNull();
   });

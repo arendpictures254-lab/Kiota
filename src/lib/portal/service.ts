@@ -12,6 +12,8 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { scopedDb, withContext } from "@/lib/db-core";
 import { dueByDate, firstMissedDueDate } from "@/lib/fees/allocation";
 import { MAX_STK_SHILLINGS, sendStkPush, systemActor } from "@/lib/mpesa/service";
+import { nairobiDate } from "@/lib/attendance/rules";
+import { summarise } from "@/lib/attendance/summary";
 import { ValidationError } from "@/lib/service-kit";
 
 type Deps = { db: PrismaClient };
@@ -103,7 +105,29 @@ export function sections(
     reportCards: c.receivesAcademics && c.modules.includes("academics"),
     leaveOuts: c.receivesBoarding && c.modules.includes("boarding"),
     pocketMoney: c.receivesBoarding && c.modules.includes("pocket_money"),
+    attendance: (c.receivesAcademics || c.receivesBoarding) && c.modules.includes("attendance"),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Attendance (when the school switches the "attendance" module on)
+// ---------------------------------------------------------------------------
+
+/** The child's attendance over the last four weeks, through app_parent_attendance(). */
+export async function childAttendance(
+  deps: Deps,
+  userId: string,
+  linkId: string,
+  now = new Date(),
+) {
+  if (!/^[0-9a-f-]{36}$/i.test(linkId)) return null;
+  const rows = await scopedDb(deps.db, { userId, schoolId: null }).$queryRaw<
+    { date: Date; session: string; status: string }[]
+  >`SELECT * FROM app_parent_attendance(${linkId}::uuid)`;
+  const today = nairobiDate(now);
+  const from = new Date(today.getTime() - 27 * 86_400_000);
+  const recent = rows.filter((r) => r.date >= from);
+  return summarise(recent, { label: "Last 4 weeks", from, to: today });
 }
 
 export function childLabel(c: Pick<ChildLink, "className" | "streamName">) {

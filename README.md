@@ -38,6 +38,11 @@ You can type them as `0711 000 001` or `+254711000001`.
 | 0711 000 003 | Grace Wanjiru          | Bahari Academy | Class teacher, and Kibet's mother        |
 | 0711 000 004 | Hassan Ali             | Bahari Academy | Gate guard: sees only the gate scanner   |
 | 0711 000 005 | Mercy Chebet           | Bahari Academy | Boarding master, may approve leave-outs  |
+| 0711 000 006 | Joseph Mwangi          | Bahari Academy | Principal: attendance, staff attendance  |
+| 0711 000 007 | Zawadi Mohamed         | Bahari Academy | Matron: boarder alerts                   |
+| 0711 000 008 | Lucy Wambui            | Bahari Academy | School secretary: photos and ID cards    |
+| 0711 000 009 | Daniel Ochieng         | Bahari Academy | Class teacher, Grade 7 West              |
+| 0711 000 010 | Ruth Njoroge           | Bahari Academy | Class teacher, Grade 8 East              |
 | 0722 000 001 | John Kamau             | Milima School  | Director                                 |
 | 0722 000 002 | Mary Achieng           | Milima School  | Bursar                                   |
 | 0722 000 003 | David Kiprono          | Milima School  | Class teacher                            |

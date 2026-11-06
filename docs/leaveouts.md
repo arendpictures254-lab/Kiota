@@ -9,8 +9,9 @@ parents trust. Parents get an SMS when the child leaves and when they are back.
    leave-outs"), or a parent in the portal, records the student, reason, leave and return times,
    and who is collecting.
    - The collector is a guardian the school marked **authorised to collect**, or **someone else**.
-     For someone else, the parents get an SMS naming them ("Reply YES 1234"), or approve in the
-     portal. Only then can it be approved. A parent who names someone else in their own request
+     For someone else, the parents get an SMS naming them with a secure "Tap to approve" link
+     (kiota.app/a/…): it opens the request in the portal after they sign in. (SMS replies,
+     "YES 1234", are switched off until the school has a two-way number: `SMS_REPLIES=on`.) Only then can it be approved. A parent who names someone else in their own request
      has approved them already.
 2. **Approve or decline.** Only staff the Director has granted **approve leave-outs** (Staff →
    person → leave-out approval). The approver's queue is on their phone under **Leave-outs**. A
@@ -86,5 +87,9 @@ approve it as Mercy (0711 000 005), print the pass, then scan it as Hassan (0711
 Offline mode needs the service worker, which runs only on https (or app.localhost): on plain
 http over Wi-Fi the gate works but not offline.
 
-To answer a "someone else is collecting" SMS without a phone:
+To answer a "someone else is collecting" SMS: open the link in it (printed by the dev server
+and in `.dev/sms-outbox.log`) and sign in as the parent. With `SMS_REPLIES=on`:
 `npm run sms:simulate -- reply --from 0744000001 --text "YES 1234"`.
+
+The Director sets the reasons and how early a child may leave (1 hour by default) under
+Leave-outs → Reasons and gate rules. Parents get an SMS when a leave-out is cancelled.

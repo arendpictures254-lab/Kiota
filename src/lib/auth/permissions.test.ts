@@ -5,7 +5,7 @@ import { ForbiddenError, assertCan, can, canGrant, effectivePermissions } from "
 const role = (key: string) => BUILT_IN_ROLES.find((r) => r.key === key)!.permissions;
 
 describe("built-in roles", () => {
-  it("seeds the ten school roles people can be given", () => {
+  it("seeds the eleven school roles people can be given", () => {
     expect(BUILT_IN_ROLES.filter((r) => !r.hidden).map((r) => r.key)).toEqual([
       "director",
       "principal",
@@ -15,6 +15,7 @@ describe("built-in roles", () => {
       "subject_teacher",
       "boarding_master",
       "matron",
+      "secretary",
       "storekeeper",
       "gate_guard",
     ]);

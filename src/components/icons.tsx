@@ -76,6 +76,20 @@ const paths: Record<string, ReactElement> = {
       <path d="M10 21v-5h4v5" />
     </>
   ),
+  attendance: (
+    <>
+      <rect x="5" y="3.5" width="14" height="18" rx="2" />
+      <path d="M9 3.5h6v3H9z" />
+      <path d="M8.5 13l2.5 2.5 4.5-5" />
+    </>
+  ),
+  card: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2" />
+      <circle cx="8" cy="11" r="2.2" />
+      <path d="M4.8 16.2c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14 10h4.5M14 13.5h3" />
+    </>
+  ),
   inbox: (
     <>
       <path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />

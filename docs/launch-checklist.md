@@ -122,11 +122,16 @@ Details: docs/parent-portal.md.
 
 Details: docs/leaveouts.md.
 
-- [ ] **Two-way SMS for collector approvals.** The SMS asks parents to "Reply YES 1234", but an
-      alphanumeric sender ID (e.g. BAHARI) cannot receive replies. Get a two-way short code or
-      long number from Africa's Talking, point its incoming messages callback at
-      `https://app.kiota.app/api/hooks/sms-in/<SMS_CALLBACK_TOKEN>`, and put that number in the
-      template's wording. Until then, parents approve in the portal (it works already).
+- [x] **Collector approvals without two-way SMS.** _Done: the SMS now carries a secure link
+      ("Tap to approve: kiota.app/a/…") that opens the approval in the parent portal after the
+      parent's normal sign-in; the link alone approves nothing. The "Reply YES 1234" route is
+      still in the code but switched off (`/api/hooks/sms-in` answers 404)._
+- [ ] **Only if the school wants SMS replies as well:** a two-way short code or long number from
+      Africa's Talking, its incoming messages callback set to
+      `https://app.kiota.app/api/hooks/sms-in/<SMS_CALLBACK_TOKEN>`, `SMS_REPLIES=on` on the
+      server, and the template's wording changed back to mention the reply.
+- [ ] **Check the approval link on a real phone**: the SMS link opens the browser, the parent
+      signs in with their code and lands on the request (Approve / Refuse).
 - [ ] **The Director grants "approve leave-outs"** to the pilot school's chosen staff (Staff →
       person), and assigns the gate guard and matron roles.
 - [ ] **Student photos uploaded** before the first leave-out: the pass and the gate rely on them.
@@ -134,11 +139,41 @@ Details: docs/leaveouts.md.
       and phone screens, the photo fallback, and an exit with the phone in airplane mode synced
       later. Keep the gate phone charged and signed in.
 - [ ] **A5 printing** of passes on the school's printer (check the QR code scans from paper).
-- [ ] **Agree the rules with the school**: how early before the leave time the gate lets a child
-      out (2 hours today), the reasons list (Half term, Weekend, Medical appointment, Family
-      event, Bereavement, Other), and who is told when a student is late back.
+- [ ] **Agree the rules with the school** and set them under Leave-outs → Reasons and gate rules
+      (Director): how early before the leave time the gate lets a child out (1 hour by default),
+      the reasons list (Half term, Weekend, Medical appointment, Family event, Bereavement,
+      Other), and who is told when a student is late back.
+- [ ] **Cancellation SMS**: parents now get an SMS when a leave-out is cancelled (critical, so it
+      goes at night too). Confirm the school wants that wording.
+- [ ] **Gate phone offline**: a genuine pass the phone has not downloaded shows "Can't check
+      offline — call the boarding master". Put the boarding master's number on the gate.
 - [ ] **Half term rehearsal**: issue passes for one class with the half-term tool, and run the
       gate's half-term mode with a queue of collectors.
+
+## Attendance and ID cards
+
+Details: docs/attendance.md.
+
+- [ ] **Class teachers set for every stream** (School setup → Classes): only a stream's class
+      teacher (or the Principal and Director) can take its register.
+- [ ] **Register times and cut-offs agreed** (Attendance → Register times and alerts): Morning
+      07:30, cut-off 08:30 and Afternoon 14:00, cut-off 14:30 by default. Registers are expected
+      Monday to Friday; decide what happens on Saturday classes (not handled yet).
+- [ ] **Absence SMS agreed with the school**: day scholars' parents get an SMS 30 minutes after
+      the register (default); boarders' parents only when the boarding staff mark the child "not
+      found" (urgent). Native-speaker check of the Kiswahili wording (`attendance_*` templates).
+- [ ] **Who gets boarder alerts**: the boarding master and matron (permission
+      `boarding.alerts`). Check the matron's phone gets the in-app notification in time.
+- [ ] **Staff attendance**: tell staff it records only the time they tap, never where they are.
+      Decide with the Principal who else may mark staff (`staff_attendance.manage`).
+- [ ] **Photos for every student** before cards are printed (Students → Photos: a folder or zip
+      named by admission number). Check the automatic crop on a few real photos.
+- [ ] **Print a test sheet of ID cards** on the school's printer (A4, 100% scale, no "fit to
+      page"): measure a card (85.6 × 54 mm), print the backs on the reverse (long edge) and check
+      they line up; or print one card on the PVC printer. Scan a printed card at the gate.
+- [ ] **The school's contacts on the back of the card** (ID cards page) and the crest uploaded.
+- [ ] **Switch on "Attendance in the parent portal"** for the school (Arend admin → modules) when
+      the school is ready for parents to see it.
 
 ## Public website
 

@@ -13,7 +13,17 @@ export const WIDTHS = [
 export const OVERFLOW_ONLY = { name: "small-phone", width: 320, height: 640 } as const;
 
 export type Role =
-  "anon" | "director" | "bursar" | "teacher" | "guard" | "boarding" | "admin" | "picker" | "parent";
+  | "anon"
+  | "director"
+  | "bursar"
+  | "teacher"
+  | "guard"
+  | "boarding"
+  | "principal"
+  | "secretary"
+  | "admin"
+  | "picker"
+  | "parent";
 
 export const PHONES: Record<Exclude<Role, "anon">, string> = {
   director: "+254711000001",
@@ -21,12 +31,22 @@ export const PHONES: Record<Exclude<Role, "anon">, string> = {
   teacher: "+254711000003",
   guard: "+254711000004",
   boarding: "+254711000005",
+  principal: "+254711000006",
+  secretary: "+254711000008",
   admin: "+254700000001",
   picker: "+254733000001",
   parent: "+254744000001",
 };
 
-export type Ids = { studentId: string; receiptId: string; brianLink: string; leaveoutId: string };
+export type Ids = {
+  studentId: string;
+  receiptId: string;
+  brianLink: string;
+  leaveoutId: string;
+  /** Grade 7 East (Grace Wanjiru's stream) and the Morning register, for the register screen. */
+  g7East: string;
+  morning: string;
+};
 
 export type Screen = {
   name: string;
@@ -43,6 +63,18 @@ export const SCREENS: Screen[] = [
   { name: "dashboard-director", role: "director", path: () => "/dashboard" },
   { name: "dashboard-bursar", role: "bursar", path: () => "/dashboard" },
   { name: "dashboard-teacher", role: "teacher", path: () => "/dashboard" },
+  { name: "dashboard-principal", role: "principal", path: () => "/dashboard" },
+  { name: "attendance", role: "principal", path: () => "/dashboard/attendance" },
+  {
+    name: "register",
+    role: "teacher",
+    path: (i) => `/dashboard/attendance/register?stream=${i.g7East}&session=${i.morning}`,
+  },
+  { name: "boarders", role: "boarding", path: () => "/dashboard/attendance/boarders" },
+  { name: "attendance-reports", role: "principal", path: () => "/dashboard/attendance/reports" },
+  { name: "staff-attendance", role: "principal", path: () => "/dashboard/attendance/staff" },
+  { name: "idcards", role: "secretary", path: () => "/dashboard/idcards" },
+  { name: "photos", role: "secretary", path: () => "/dashboard/students/photos" },
   { name: "gate", role: "guard", path: () => "/gate" },
   { name: "staff", role: "director", path: () => "/dashboard/staff" },
   { name: "setup", role: "director", path: () => "/dashboard/setup" },
@@ -70,5 +102,6 @@ export const SCREENS: Screen[] = [
   { name: "parent-fees", role: "parent", path: (i) => `/parent/${i.brianLink}/fees` },
   { name: "parent-notices", role: "parent", path: (i) => `/parent/${i.brianLink}/notices` },
   { name: "parent-leaveouts", role: "parent", path: (i) => `/parent/${i.brianLink}/leaveouts` },
+  { name: "parent-attendance", role: "parent", path: (i) => `/parent/${i.brianLink}/attendance` },
   { name: "account", role: "parent", path: () => "/account" },
 ];

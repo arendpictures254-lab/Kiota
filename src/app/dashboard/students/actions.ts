@@ -1,5 +1,7 @@
 "use server";
 
+import { reissueCard } from "@/lib/idcards/service";
+import { saveStudentPhoto } from "@/lib/students/photos";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { type FormState, attempt, currentActor, deps, formFile, formObject } from "@/lib/actions";
@@ -123,8 +125,41 @@ export async function uploadPhotoAction(_s: FormState, form: FormData): Promise<
   const studentId = String(form.get("studentId") ?? "");
   const file = await formFile(form);
   const r = await attempt(
-    async () => students.setStudentPhoto(deps, await currentActor(), studentId, file),
+    async () =>
+      students.setStudentPhoto(
+        deps,
+        await currentActor(),
+        studentId,
+        file,
+        form.get("source") === "camera" ? "camera" : "upload",
+      ),
     "Photo saved.",
+  );
+  revalidatePath(`/dashboard/students/${studentId}`);
+  return r;
+}
+
+/** One photo from the bulk upload (the browser sends them one at a time). */
+export async function uploadBulkPhotoAction(form: FormData): Promise<FormState> {
+  const studentId = String(form.get("studentId") ?? "");
+  const file = await formFile(form);
+  return attempt(async () =>
+    saveStudentPhoto(deps, await currentActor(), studentId, file, {
+      source: "bulk",
+      checkFileName: true,
+    }),
+  );
+}
+
+export async function finishBulkPhotosAction(): Promise<void> {
+  revalidatePath("/dashboard/students", "layout");
+}
+
+export async function reissueCardAction(_s: FormState, form: FormData): Promise<FormState> {
+  const studentId = String(form.get("studentId") ?? "");
+  const r = await attempt(
+    async () => reissueCard(deps, await currentActor(), studentId, form.get("reason")),
+    "New card issued. The old card no longer works. Print the new one from ID cards.",
   );
   revalidatePath(`/dashboard/students/${studentId}`);
   return r;

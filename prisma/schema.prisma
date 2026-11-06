@@ -54,6 +54,7 @@ model School {
   wallet           Wallet?
   messageCampaigns MessageCampaign[]
   messages         Message[]
+  settings         SchoolSettings?
 
   @@map("schools")
 }
@@ -151,11 +152,12 @@ model Membership {
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school  School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user    User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roles   MembershipRole[]
-  grants  PermissionGrant[]
-  streams Stream[]
+  school          School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles           MembershipRole[]
+  grants          PermissionGrant[]
+  streams         Stream[]
+  staffAttendance StaffAttendance[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -309,9 +311,10 @@ model Stream {
   classTeacherMembershipId String?  @map("class_teacher_membership_id") @db.Uuid
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  class        Class       @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
-  classTeacher Membership? @relation(fields: [schoolId, classTeacherMembershipId], references: [schoolId, id], onDelete: Restrict)
+  class        Class                @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  classTeacher Membership?          @relation(fields: [schoolId, classTeacherMembershipId], references: [schoolId, id], onDelete: Restrict)
   students     Student[]
+  registers    AttendanceRegister[]
 
   @@unique([classId, name])
   @@unique([schoolId, id])
@@ -433,39 +436,44 @@ enum StudentStatus {
 
 /// Students are archived (status), never deleted: the app role has no DELETE on this table.
 model Student {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId        String        @map("school_id") @db.Uuid
-  admissionNumber String        @map("admission_number")
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String        @map("school_id") @db.Uuid
+  admissionNumber  String        @map("admission_number")
   /// NEMIS Unique Personal Identifier.
-  upi             String?
-  firstName       String        @map("first_name")
-  middleName      String?       @map("middle_name")
-  lastName        String        @map("last_name")
-  gender          Gender
-  dateOfBirth     DateTime      @map("date_of_birth") @db.Date
-  photoKey        String?       @map("photo_key")
-  classId         String        @map("class_id") @db.Uuid
-  streamId        String?       @map("stream_id") @db.Uuid
-  boarder         Boolean       @default(false)
-  houseId         String?       @map("house_id") @db.Uuid
-  pathwayId       String?       @map("pathway_id") @db.Uuid
-  specialNeeds    String?       @map("special_needs")
-  status          StudentStatus @default(active)
-  statusDate      DateTime      @default(now()) @map("status_date") @db.Date
-  statusReason    String?       @map("status_reason")
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  upi              String?
+  firstName        String        @map("first_name")
+  middleName       String?       @map("middle_name")
+  lastName         String        @map("last_name")
+  gender           Gender
+  dateOfBirth      DateTime      @map("date_of_birth") @db.Date
+  /// The cropped portrait (ID cards, passes, the gate). The upload as it was: photoOriginalKey.
+  photoKey         String?       @map("photo_key")
+  photoOriginalKey String?       @map("photo_original_key")
+  classId          String        @map("class_id") @db.Uuid
+  streamId         String?       @map("stream_id") @db.Uuid
+  boarder          Boolean       @default(false)
+  houseId          String?       @map("house_id") @db.Uuid
+  pathwayId        String?       @map("pathway_id") @db.Uuid
+  specialNeeds     String?       @map("special_needs")
+  status           StudentStatus @default(active)
+  statusDate       DateTime      @default(now()) @map("status_date") @db.Date
+  statusReason     String?       @map("status_reason")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  class          Class                 @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
-  stream         Stream?               @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
-  house          House?                @relation(fields: [schoolId, houseId], references: [schoolId, id], onDelete: Restrict)
-  pathway        Pathway?              @relation(fields: [schoolId, pathwayId], references: [schoolId, id], onDelete: Restrict)
-  medical        StudentMedical?
-  statusChanges  StudentStatusChange[]
-  guardians      GuardianLink[]
-  subjects       StudentSubject[]
-  documents      StudentDocument[]
-  openingBalance OpeningBalance?
+  class           Class                 @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  stream          Stream?               @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+  house           House?                @relation(fields: [schoolId, houseId], references: [schoolId, id], onDelete: Restrict)
+  pathway         Pathway?              @relation(fields: [schoolId, pathwayId], references: [schoolId, id], onDelete: Restrict)
+  medical         StudentMedical?
+  statusChanges   StudentStatusChange[]
+  attendanceMarks AttendanceMark[]
+  absenceAlerts   AbsenceAlert[]
+  cards           StudentCard[]
+  guardians       GuardianLink[]
+  subjects        StudentSubject[]
+  documents       StudentDocument[]
+  openingBalance  OpeningBalance?
 
   leaveouts Leaveout[]
 
@@ -1272,6 +1280,8 @@ model Leaveout {
   collectorRelationship String    @map("collector_relationship")
   /// 4 digits the parent replies with ("YES 1234") to approve another collector.
   collectorConfirmCode  String?   @map("collector_confirm_code")
+  /// SHA-256 of the token in the parent's "Tap to approve" link (kiota.app/a/<token>).
+  collectorLinkHash     String?   @unique @map("collector_link_hash")
   collectorApprovedAt   DateTime? @map("collector_approved_at") @db.Timestamptz(3)
   collectorApprovedById String?   @map("collector_approved_by_id") @db.Uuid
   /// awaiting_parent, pending, approved, declined, cancelled, out, returned
@@ -1372,4 +1382,168 @@ model LeaveoutPassKey {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("leaveout_pass_keys")
+}
+
+// ---------------------------------------------------------------------------
+// School settings, attendance, student ID cards
+// ---------------------------------------------------------------------------
+
+/// One row per school (created with the school): settings that are not their own table.
+model SchoolSettings {
+  schoolId                 String   @id @map("school_id") @db.Uuid
+  /// How early before the leave time the gate lets a child out.
+  leaveoutEarlyExitMinutes Int      @default(60) @map("leaveout_early_exit_minutes")
+  /// SMS a day scholar's parents when they are marked absent.
+  absenceSmsDayScholars    Boolean  @default(true) @map("absence_sms_day_scholars")
+  /// Minutes after the register before that SMS goes (a quick correction cancels it).
+  absenceSmsDelayMinutes   Int      @default(30) @map("absence_sms_delay_minutes")
+  /// Also SMS a boarder's parents straight away (normally only when the boarding staff mark
+  /// the child "not found").
+  absenceSmsBoarders       Boolean  @default(false) @map("absence_sms_boarders")
+  /// The back of the student ID card: the school's phone, email and address.
+  cardPhone                String?  @map("card_phone")
+  cardEmail                String?  @map("card_email")
+  cardAddress              String?  @map("card_address")
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@map("school_settings")
+}
+
+/// The registers a school takes each day (e.g. Morning, Afternoon), with a cut-off time.
+/// Times are minutes after midnight, Nairobi time.
+model AttendanceSession {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String  @map("school_id") @db.Uuid
+  name         String
+  opensMinute  Int     @map("opens_minute")
+  cutoffMinute Int     @map("cutoff_minute")
+  position     Int
+  active       Boolean @default(true)
+
+  registers AttendanceRegister[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("attendance_sessions")
+}
+
+/// One register per stream, session and day. Submitted once; corrected the same day by the
+/// teacher, later only with attendance.manage (every change is in the audit log).
+model AttendanceRegister {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String    @map("school_id") @db.Uuid
+  streamId      String    @map("stream_id") @db.Uuid
+  sessionId     String    @map("session_id") @db.Uuid
+  date          DateTime  @db.Date
+  submittedAt   DateTime  @map("submitted_at") @db.Timestamptz(3)
+  submittedById String    @map("submitted_by_id") @db.Uuid
+  correctedAt   DateTime? @map("corrected_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  stream  Stream            @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+  session AttendanceSession @relation(fields: [schoolId, sessionId], references: [schoolId, id], onDelete: Restrict)
+  marks   AttendanceMark[]
+
+  @@unique([schoolId, streamId, sessionId, date])
+  @@unique([schoolId, id])
+  @@index([schoolId, date])
+  @@map("attendance_registers")
+}
+
+/// One student on one register: present, absent, late or on_leave (an approved leave-out).
+model AttendanceMark {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  registerId String   @map("register_id") @db.Uuid
+  studentId  String   @map("student_id") @db.Uuid
+  date       DateTime @db.Date
+  status     String
+  leaveoutId String?  @map("leaveout_id") @db.Uuid
+  markedById String   @map("marked_by_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  register AttendanceRegister @relation(fields: [schoolId, registerId], references: [schoolId, id], onDelete: Restrict)
+  student  Student            @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([registerId, studentId])
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId, date])
+  @@index([schoolId, date])
+  @@map("attendance_marks")
+}
+
+/// What happens after a student is marked absent:
+///  - parent_sms: an SMS to the parents when due_at comes, unless the mark was corrected first;
+///  - boarder: the boarding staff look for the child (found, or not found: parents are told).
+model AbsenceAlert {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String    @map("school_id") @db.Uuid
+  markId       String    @map("mark_id") @db.Uuid
+  studentId    String    @map("student_id") @db.Uuid
+  date         DateTime  @db.Date
+  /// "parent_sms" or "boarder"
+  kind         String
+  /// parent_sms: waiting, sent, cancelled. boarder: waiting, found, not_found, cancelled.
+  status       String
+  dueAt        DateTime? @map("due_at") @db.Timestamptz(3)
+  resolvedById String?   @map("resolved_by_id") @db.Uuid
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz(3)
+  note         String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId, status])
+  @@index([schoolId, markId])
+  @@map("absence_alerts")
+}
+
+/// A staff member's day: "I'm in" and "I'm leaving" on their phone, or marked by the Principal.
+/// No location is recorded.
+model StaffAttendance {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String    @map("school_id") @db.Uuid
+  membershipId String    @map("membership_id") @db.Uuid
+  date         DateTime  @db.Date
+  /// present, absent or leave
+  status       String
+  inAt         DateTime? @map("in_at") @db.Timestamptz(3)
+  outAt        DateTime? @map("out_at") @db.Timestamptz(3)
+  /// "self" or "manual"
+  source       String
+  markedById   String    @map("marked_by_id") @db.Uuid
+  note         String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  membership Membership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, membershipId, date])
+  @@index([schoolId, date])
+  @@map("staff_attendance")
+}
+
+/// A printed student ID card. Its QR code is a signed token naming only this card (KC1...), so
+/// reissuing a card (a new row, the old one revoked) stops the old card at once.
+model StudentCard {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  studentId      String    @map("student_id") @db.Uuid
+  /// Random, carried in the token: a token made up for a real card id still fails.
+  nonce          String
+  validUntilYear Int       @map("valid_until_year")
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  issuedById     String    @map("issued_by_id") @db.Uuid
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedById    String?   @map("revoked_by_id") @db.Uuid
+  revokeReason   String?   @map("revoke_reason")
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("student_cards")
 }

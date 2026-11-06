@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AFTER_SIGN_IN_COOKIE, AFTER_SIGN_IN_PATH } from "@/lib/auth/after-sign-in";
 import { audit } from "@/lib/audit";
 import { clientIp, getMe, listMySchools } from "@/lib/auth/context";
 import { createOtpService } from "@/lib/auth/otp";
@@ -84,6 +85,14 @@ export async function signInAction(_prev: SignInState, form: FormData): Promise<
     hasChildren: children.length > 0,
     mode: null,
   });
+  // A link opened before signing in (a leave-out approval): go back to it.
+  const jar = await cookies();
+  const after = jar.get(AFTER_SIGN_IN_COOKIE)?.value;
+  if (after) jar.delete(AFTER_SIGN_IN_COOKIE);
+  if (after && AFTER_SIGN_IN_PATH.test(after) && children.length) {
+    await setSessionMode(session.id, "parent");
+    redirect(after);
+  }
   if (home === "/parent") await setSessionMode(session.id, "parent");
   if (home === "/dashboard") {
     await setSessionMode(session.id, "staff");

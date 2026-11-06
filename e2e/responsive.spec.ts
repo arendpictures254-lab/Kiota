@@ -50,6 +50,17 @@ test.beforeAll(async () => {
         [bahari],
       )
     ).id,
+    g7East: (
+      await one(
+        "SELECT st.id FROM streams st JOIN classes c ON c.id = st.class_id WHERE st.school_id = $1 AND c.name = 'Grade 7' AND st.name = 'East'",
+        [bahari],
+      )
+    ).id,
+    morning: (
+      await one("SELECT id FROM attendance_sessions WHERE school_id = $1 AND name = 'Morning'", [
+        bahari,
+      ])
+    ).id,
   };
 });
 

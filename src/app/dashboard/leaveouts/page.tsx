@@ -54,9 +54,16 @@ async function Hub() {
   const p = actor.permissions;
   return (
     <div className="flex flex-col gap-6">
-      {canRequestLeaveouts(p) ? (
-        <ButtonLink href="/dashboard/leaveouts/new">Request a leave-out</ButtonLink>
-      ) : null}
+      <div className="flex flex-col gap-3 empty:hidden sm:flex-row sm:flex-wrap">
+        {canRequestLeaveouts(p) ? (
+          <ButtonLink href="/dashboard/leaveouts/new">Request a leave-out</ButtonLink>
+        ) : null}
+        {p.has("school.settings.manage") ? (
+          <ButtonLink href="/dashboard/leaveouts/settings" variant="secondary">
+            Reasons and gate rules
+          </ButtonLink>
+        ) : null}
+      </div>
 
       <section className="flex flex-col gap-2" aria-labelledby="waiting">
         <h2 id="waiting" className="font-heading text-section font-bold">

@@ -13,6 +13,7 @@ import { ForbiddenError } from "@/lib/auth/permissions";
 import { withContext } from "@/lib/db-core";
 import { ensureMessagingMember } from "@/lib/messaging/system";
 import { type Actor, type Deps, ValidationError, ctxOf } from "@/lib/service-kit";
+import { settingsIn } from "@/lib/settings/service";
 import { getStorage } from "@/lib/storage";
 import { leaveoutVars, notifyStaffWith, sendLeaveoutSms } from "./notify";
 import { parsePass, pickupCodeHash } from "./pass-token";
@@ -128,7 +129,8 @@ async function approverNames(db: PrismaClient, actor: Actor, ids: (string | null
 /** Everything the gate phone needs to work offline today and tomorrow. */
 export async function gateBundle({ db }: Deps, actor: Actor, now = new Date()) {
   assertGate(actor);
-  const { key, school, rows } = await withContext(db, ctxOf(actor), async (tx) => ({
+  const { key, school, rows, settings } = await withContext(db, ctxOf(actor), async (tx) => ({
+    settings: await settingsIn(tx, actor.schoolId),
     key: await tx.leaveoutPassKey.findUnique({ where: { schoolId: actor.schoolId } }),
     school: await tx.school.findUniqueOrThrow({
       where: { id: actor.schoolId },
@@ -169,6 +171,8 @@ export async function gateBundle({ db }: Deps, actor: Actor, now = new Date()) {
     school,
     publicKey: key?.publicKey ?? null,
     generatedAt: now.toISOString(),
+    /** The school's rule: how early before the leave time a child may go. */
+    earlyExitMinutes: settings.leaveoutEarlyExitMinutes,
     passes,
   };
 }
@@ -302,7 +306,11 @@ async function recordOne(
           return { result: { id: e.id, ok: false, error: "Wrong pickup code." }, sms: null };
         conflict = "The pickup code entered offline does not match.";
       }
-      const v = passVerdict(row, at);
+      const v = passVerdict(
+        row,
+        at,
+        (await settingsIn(tx, actor.schoolId)).leaveoutEarlyExitMinutes,
+      );
       if (row.status === "out" || row.status === "returned") {
         conflict = "Already let out (another gate device or a repeated scan).";
       } else if (!v.valid) {
@@ -421,4 +429,28 @@ export async function leaveoutPhoto({ db }: Deps, actor: Actor, leaveoutId: stri
     }),
   );
   return row?.photoKey ? getStorage().get(row.photoKey) : null;
+}
+
+/**
+ * A student's leave-outs the gate can act on now (approved, or out): used when a guard scans the
+ * student's ID card instead of a pass. Newest first.
+ */
+export async function gatePassesForStudent({ db }: Deps, actor: Actor, studentId: string) {
+  assertGate(actor);
+  const rows = await withContext(db, ctxOf(actor), (tx) =>
+    tx.leaveout.findMany({
+      where: { schoolId: actor.schoolId, studentId, status: { in: ["approved", "out"] } },
+      select: { ...GATE_SELECT, studentId: true },
+      orderBy: { leaveAt: "desc" },
+      take: 3,
+    }),
+  );
+  const names = await approverNames(
+    db,
+    actor,
+    rows.map((r) => r.decidedById),
+  );
+  return Promise.all(
+    rows.map((r) => toGatePass(r, r.decidedById ? (names.get(r.decidedById) ?? null) : null, true)),
+  );
 }

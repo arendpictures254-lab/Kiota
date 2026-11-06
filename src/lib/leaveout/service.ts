@@ -8,9 +8,13 @@
  *  - leaveout.approve: granted person by person by the Director; approves, declines, half term.
  *  - boarding.manage: the who-is-out board, reports, gate conflicts.
  * The collector must be a guardian marked "authorised to collect", or another person a parent
- * approves (SMS reply "YES 1234" or in the portal) before an approver can approve.
+ * approves before an approver can approve: the SMS carries a "Tap to approve" link
+ * (kiota.app/a/<token>) that opens the portal after the parent signs in. (An SMS reply
+ * "YES 1234" also works where the school has a two-way number: see SMS_REPLIES.)
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { sha256 } from "@/lib/crypto";
+import { SITE_URL } from "@/lib/hosts";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
 import type { PermissionKey } from "@/lib/auth/catalog";
@@ -186,6 +190,7 @@ export async function requestLeaveout(
       collector = { kind: "other", linkId: null, ...input.collector };
     }
     const confirmCode = collector.kind === "other" ? pickupCode() : null;
+    const approveToken = collector.kind === "other" ? randomBytes(18).toString("base64url") : null;
     const row = await tx.leaveout.create({
       data: {
         schoolId: actor.schoolId,
@@ -201,6 +206,7 @@ export async function requestLeaveout(
         collectorPhone: collector.phone,
         collectorRelationship: collector.relationship,
         collectorConfirmCode: confirmCode,
+        collectorLinkHash: approveToken ? sha256(approveToken) : null,
         status: collector.kind === "other" ? "awaiting_parent" : "pending",
         requestedVia: "staff",
         requestedById: actor.userId,
@@ -236,9 +242,9 @@ export async function requestLeaveout(
         [actor.userId],
       );
     }
-    return row;
+    return { ...row, approveToken };
   });
-  // Another collector: the parent approves first (SMS reply or the portal).
+  // Another collector: the parent approves first (the link in the SMS, or the portal).
   if (created.status === "awaiting_parent") {
     await sendLeaveoutSms(
       deps.db,
@@ -250,12 +256,16 @@ export async function requestLeaveout(
         phone: created.collectorPhone.replace(/^\+254/, "0"),
         date: whenText(created.leaveAt, lang),
         code: created.collectorConfirmCode!,
+        link: approveLink(created.approveToken!),
       }),
       { now },
     );
   }
   return created;
 }
+
+/** The parent's approval link, short enough for an SMS: kiota.app/a/<token>. */
+export const approveLink = (token: string) => `${SITE_URL.replace(/^https?:\/\//, "")}/a/${token}`;
 
 /** After a parent's YES (SMS or portal): tell the approvers there is a request to look at. */
 export async function collectorApproved(db: PrismaClient, schoolId: string, leaveoutId: string) {
@@ -419,7 +429,7 @@ export async function cancelLeaveout(
   now = new Date(),
 ) {
   const reason = clean(rawReason) ?? "Cancelled";
-  await withContext(deps.db, ctxOf(actor), async (tx) => {
+  const l = await withContext(deps.db, ctxOf(actor), async (tx) => {
     const row = await tx.leaveout.findUnique({
       where: { schoolId: actor.schoolId, id: leaveoutId },
     });
@@ -454,7 +464,35 @@ export async function cancelLeaveout(
       after: { status: "cancelled", reason },
       ip: actor.ip,
     });
+    return row;
   });
+  await sendCancelledSms(deps.db, l, reason, now);
+}
+
+/** Tell the parents a leave-out was cancelled (the pass stops working at the gate). */
+export async function sendCancelledSms(
+  db: PrismaClient,
+  l: Parameters<typeof sendLeaveoutSms>[1],
+  reason: string,
+  now = new Date(),
+) {
+  await sendLeaveoutSms(
+    db,
+    l,
+    "leaveout_cancelled",
+    "parents",
+    (lang) => ({ date: whenText(l.leaveAt, lang), reason }),
+    { now },
+  );
+}
+
+/** After a parent cancelled in the portal: the same SMS (all the child's parents hear of it). */
+export async function parentCancelled(db: PrismaClient, schoolId: string, leaveoutId: string) {
+  const sys = await messagingActor(db, schoolId);
+  const l = await withContext(db, { userId: sys.userId, schoolId }, (tx) =>
+    tx.leaveout.findUnique({ where: { schoolId, id: leaveoutId } }),
+  );
+  if (l) await sendCancelledSms(db, l, l.cancelReason ?? "Cancelled by the parent");
 }
 
 // ---------------------------------------------------------------------------

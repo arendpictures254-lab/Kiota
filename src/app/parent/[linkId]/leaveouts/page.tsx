@@ -47,7 +47,8 @@ async function Leaveouts({ params, searchParams }: PageProps<"/parent/[linkId]/l
         {list.map((l) => (
           <li
             key={l.id}
-            className="flex flex-col gap-2 rounded-2xl border border-ink/10 bg-white p-4"
+            id={`lo-${l.id}`}
+            className="flex scroll-mt-20 flex-col gap-2 rounded-2xl border border-ink/10 bg-white p-4 target:border-teal target:ring-2 target:ring-teal/30"
             data-testid="parent-leaveout"
           >
             <div className="flex items-start justify-between gap-2">

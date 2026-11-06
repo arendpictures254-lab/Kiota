@@ -62,6 +62,16 @@ async function Students({ searchParams }: Pick<PageProps<"/dashboard/students">,
             Import from Excel
           </ButtonLink>
         ) : null}
+        {actor.permissions.has("photos.manage") || actor.permissions.has("students.edit") ? (
+          <ButtonLink href="/dashboard/students/photos" variant="secondary">
+            Photos
+          </ButtonLink>
+        ) : null}
+        {actor.permissions.has("idcards.print") ? (
+          <ButtonLink href="/dashboard/idcards" variant="secondary">
+            ID cards
+          </ButtonLink>
+        ) : null}
       </div>
 
       <form

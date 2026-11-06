@@ -20,7 +20,7 @@ export type PassToken = {
   signature: string;
 };
 
-function toB64u(bytes: Uint8Array): string {
+export function toB64u(bytes: Uint8Array): string {
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -36,13 +36,13 @@ export function fromB64u(text: string): Uint8Array<ArrayBuffer> {
 
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-function uuidToB64u(id: string): string {
+export function uuidToB64u(id: string): string {
   const h = id.replace(/-/g, "");
   if (!/^[0-9a-f]{32}$/i.test(h)) throw new Error("not a uuid");
   return toB64u(Uint8Array.from(h.match(/../g)!.map((x) => parseInt(x, 16))));
 }
 
-function b64uToUuid(text: string): string | null {
+export function b64uToUuid(text: string): string | null {
   try {
     const b = fromB64u(text);
     if (b.length !== 16) return null;

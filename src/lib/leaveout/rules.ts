@@ -9,8 +9,8 @@
 export type LeaveoutStatus =
   "awaiting_parent" | "pending" | "approved" | "declined" | "cancelled" | "out" | "returned";
 
-/** How early before the leave time the gate lets a child out. */
-export const EARLY_EXIT_MS = 2 * 60 * 60 * 1000;
+/** How early before the leave time the gate lets a child out, unless the school sets it. */
+export const DEFAULT_EARLY_EXIT_MINUTES = 60;
 
 export type PassState = {
   status: string;
@@ -19,14 +19,31 @@ export type PassState = {
 };
 
 export type NotValidReason =
-  "not_found" | "cancelled" | "declined" | "not_approved" | "used" | "expired" | "too_early";
+  | "not_found"
+  | "cancelled"
+  | "declined"
+  | "not_approved"
+  | "used"
+  | "expired"
+  | "too_early"
+  /** A genuine pass the phone has not downloaded, and no internet to ask: not a refusal. */
+  | "cannot_check"
+  /** A student's ID card, and the student has no approved leave-out. */
+  | "no_leaveout";
 
 export type Verdict =
   | { valid: true; action: "exit" | "return"; late: boolean }
   | { valid: false; reason: NotValidReason };
 
-/** What the gate may do with this pass now: let the child out, take them back, or refuse. */
-export function passVerdict(p: PassState | null, now: Date): Verdict {
+/**
+ * What the gate may do with this pass now: let the child out, take them back, or refuse.
+ * `earlyExitMinutes` is the school's setting (how early before the leave time a child may go).
+ */
+export function passVerdict(
+  p: PassState | null,
+  now: Date,
+  earlyExitMinutes = DEFAULT_EARLY_EXIT_MINUTES,
+): Verdict {
   if (!p) return { valid: false, reason: "not_found" };
   const leave = new Date(p.leaveAt).getTime();
   const back = new Date(p.returnAt).getTime();
@@ -43,7 +60,8 @@ export function passVerdict(p: PassState | null, now: Date): Verdict {
     case "out":
       return { valid: true, action: "return", late: now.getTime() > back };
     case "approved":
-      if (now.getTime() < leave - EARLY_EXIT_MS) return { valid: false, reason: "too_early" };
+      if (now.getTime() < leave - earlyExitMinutes * 60_000)
+        return { valid: false, reason: "too_early" };
       if (now.getTime() > back) return { valid: false, reason: "expired" };
       return { valid: true, action: "exit", late: false };
     default:
@@ -59,6 +77,8 @@ export const REASON_TEXT: Record<NotValidReason, string> = {
   used: "Already used: out and back",
   expired: "Expired: past the return time",
   too_early: "Wrong time: too early to leave",
+  cannot_check: "Can't check offline — call the boarding master",
+  no_leaveout: "No valid leave-out",
 };
 
 /** A 4-digit pickup code (never starting with 0, so it reads well in an SMS). */

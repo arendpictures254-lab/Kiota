@@ -17,8 +17,15 @@ import {
   randomPhone,
 } from "../../../tests/db-helpers";
 import { gateBundle, gatePass, recordGateEvents, searchGatePasses } from "./gate";
-import { parentLeaveouts, parentRequestLeaveout, smsCollectorReply } from "./parent";
+import {
+  collectorLinkTarget,
+  parentCancelLeaveout,
+  parentLeaveouts,
+  parentRequestLeaveout,
+  smsCollectorReply,
+} from "./parent";
 import { parsePass, pickupCodeHash, verifyPass } from "./pass-token";
+import { updateLeaveoutSettings } from "@/lib/settings/service";
 import { passVerdict } from "./rules";
 import {
   approveLeaveout,
@@ -237,7 +244,7 @@ describe("the collector", () => {
     ).rejects.toThrow(/not marked as authorised to collect/);
   });
 
-  it("or someone the parent approves by SMS reply, before an approver can approve", async () => {
+  it("or someone the parent approves (a link in the SMS), before an approver can approve", async () => {
     const c = await child(A);
     const l = await requestLeaveout(
       deps,
@@ -260,9 +267,23 @@ describe("the collector", () => {
     const ask = (await messagesTo(A.school.id, "leaveout_collector_confirm")).find(
       (m) => m.toPhone === c.mumPhone,
     )!;
-    expect(ask.body).toContain(`Peter Kariuki (0712999888) is named to collect Amani`);
-    expect(ask.body).toContain(`Reply YES ${l.collectorConfirmCode}`);
+    expect(ask.body).toContain(`Peter Kariuki (0712999888) will collect Amani`);
+    expect(ask.body).not.toContain("Reply YES");
+    const token = /Tap to approve: \S+\/a\/([A-Za-z0-9_-]+)/.exec(ask.body)?.[1];
+    expect(token).toBeTruthy();
+    // The link finds the request for this parent only; it approves nothing by itself.
+    expect(await collectorLinkTarget(deps, c.mumId, token!)).toEqual({
+      linkId: c.mother.id,
+      leaveoutId: l.id,
+    });
+    const stranger = await owner.user.create({ data: { phone: randomPhone(), name: "X" } });
+    expect(await collectorLinkTarget(deps, stranger.id, token!)).toBeNull();
+    expect(await collectorLinkTarget(deps, c.mumId, "x".repeat(24))).toBeNull();
+    expect((await owner.leaveout.findUniqueOrThrow({ where: { id: l.id } })).status).toBe(
+      "awaiting_parent",
+    );
 
+    // (The old SMS reply still works where a school has a two-way number: SMS_REPLIES=on.)
     // A reply from a number that is not the child's guardian changes nothing.
     expect(await smsCollectorReply(app, randomPhone(), `YES ${l.collectorConfirmCode}`)).toBeNull();
     expect(await smsCollectorReply(app, c.mumPhone, `yes ${l.collectorConfirmCode}`)).toMatchObject(
@@ -303,14 +324,15 @@ describe("the gate pass", () => {
     expect(entry.pickupCodeHash).toBe(await pickupCodeHash(pass.id, pass.code));
     expect(JSON.stringify(entry)).not.toContain(`"${pass.code}"`);
     // The collector got the pickup code by SMS (critical).
-    const sms = (await messagesTo(A.school.id, "leaveout_pickup_code")).find((m) =>
-      m.body.includes(pass.code),
+    // (Matched on the phone too: another pass in this school may share the 4-digit code.)
+    const sms = (await messagesTo(A.school.id, "leaveout_pickup_code")).find(
+      (m) => m.toPhone === c.mumPhone && m.body.includes(pass.code),
     )!;
     expect(sms).toMatchObject({ toPhone: c.mumPhone, critical: true });
   });
 
   it("rejects cancelled, expired, too early and used passes", () => {
-    const now = new Date("2026-11-13T12:00:00+03:00");
+    const now = new Date("2026-11-13T13:15:00+03:00"); // 45 minutes before leaving
     const p = { leaveAt: "2026-11-13T14:00:00+03:00", returnAt: "2026-11-15T17:00:00+03:00" };
     expect(passVerdict({ ...p, status: "approved" }, now)).toEqual({
       valid: true,
@@ -336,6 +358,13 @@ describe("the gate pass", () => {
       reason: "not_approved",
     });
     expect(passVerdict(null, now)).toEqual({ valid: false, reason: "not_found" });
+    // The school's rule (default one hour): 90 minutes early is refused, unless it allows two.
+    const early = new Date("2026-11-13T12:30:00+03:00");
+    expect(passVerdict({ ...p, status: "approved" }, early)).toEqual({
+      valid: false,
+      reason: "too_early",
+    });
+    expect(passVerdict({ ...p, status: "approved" }, early, 120)).toMatchObject({ valid: true });
     expect(passVerdict({ ...p, status: "out" }, new Date("2026-11-16T09:00:00+03:00"))).toEqual({
       valid: true,
       action: "return",
@@ -441,6 +470,37 @@ describe("exit and return", () => {
       },
     ]);
     expect(r).toMatchObject({ ok: false, error: "Not valid: cancelled." });
+    // The parents are told the pass no longer works.
+    const sms = (await messagesTo(A.school.id, "leaveout_cancelled")).filter(
+      (m) => m.toPhone === c.mumPhone,
+    );
+    expect(sms).toHaveLength(1);
+    expect(sms[0].body).toContain("was cancelled. The pass no longer works. Reason: Plans changed");
+  });
+
+  it("follows the school's rule for how early a child may leave", async () => {
+    const c = await child(A);
+    const pass = await approvedPass(A, c, { leave: 0.5, back: 48 }); // leaves in 30 minutes
+    await updateLeaveoutSettings(deps, A.director.actor, { earlyExitMinutes: "10" });
+    try {
+      expect((await gateBundle(deps, A.guard.actor)).earlyExitMinutes).toBe(10);
+      const [r] = await recordGateEvents(deps, A.guard.actor, [
+        {
+          id: crypto.randomUUID(),
+          leaveoutId: pass.id,
+          kind: "exit",
+          at: new Date().toISOString(),
+          code: pass.code,
+        },
+      ]);
+      expect(r).toMatchObject({ ok: false, error: "Not valid: too_early." });
+      // Only the Director changes it.
+      await expect(
+        updateLeaveoutSettings(deps, A.boardingMaster.actor, { earlyExitMinutes: "300" }),
+      ).rejects.toThrow(ForbiddenError);
+    } finally {
+      await updateLeaveoutSettings(deps, A.director.actor, { earlyExitMinutes: "60" });
+    }
   });
 
   it("syncs offline events once, and flags a pass cancelled while the gate was offline", async () => {
@@ -584,6 +644,12 @@ describe("parents", () => {
     const after = (await parentLeaveouts(deps, c.mumId, c.mother.id)).find((l) => l.id === id)!;
     expect(after.status).toBe("approved");
     expect(parsePass(after.passToken!)).toMatchObject({ leaveoutId: id });
+    // The parent cancels: every parent of the child gets the cancellation SMS.
+    expect(await parentCancelLeaveout(deps, c.mumId, id)).toBe(true);
+    const told = (await messagesTo(A.school.id, "leaveout_cancelled")).filter((m) =>
+      m.body.includes("Cancelled by the parent"),
+    );
+    expect(told.map((m) => m.toPhone)).toContain(c.mumPhone);
     // The father is not authorised to collect: a parent cannot name him that way.
     await expect(
       parentRequestLeaveout(deps, c.mumId, c.mother.id, {

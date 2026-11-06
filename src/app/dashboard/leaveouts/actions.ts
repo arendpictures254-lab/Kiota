@@ -12,6 +12,7 @@ import {
   requestLeaveout,
 } from "@/lib/leaveout/service";
 import { kickMessageWorker } from "@/lib/messaging/worker-loop";
+import { changeLeaveoutReason, updateLeaveoutSettings } from "@/lib/settings/service";
 
 function done(id?: string) {
   revalidatePath("/dashboard/leaveouts", "layout");
@@ -70,4 +71,36 @@ export async function halfTermAction(_s: FormState, form: FormData): Promise<For
   });
   done();
   return r.error ? r : { ok: message };
+}
+
+// ---- Settings (the Director): reasons and how early a child may leave ----
+
+export async function leaveoutSettingsAction(_s: FormState, form: FormData): Promise<FormState> {
+  const r = await attempt(
+    async () => updateLeaveoutSettings(deps, await currentActor(), formObject(form)),
+    "Saved.",
+  );
+  revalidatePath("/dashboard/leaveouts/settings");
+  return r;
+}
+
+export async function leaveoutReasonAction(_s: FormState, form: FormData): Promise<FormState> {
+  const o = formObject(form);
+  const r = await attempt(async () => {
+    const actor = await currentActor();
+    const id = o.id ?? "";
+    switch (o.intent) {
+      case "add":
+        return changeLeaveoutReason(deps, actor, { kind: "add", name: o.name });
+      case "rename":
+        return changeLeaveoutReason(deps, actor, { kind: "rename", id, name: o.name });
+      case "toggle":
+        return changeLeaveoutReason(deps, actor, { kind: "toggle", id });
+      case "up":
+      case "down":
+        return changeLeaveoutReason(deps, actor, { kind: "move", id, direction: o.intent });
+    }
+  });
+  revalidatePath("/dashboard/leaveouts/settings");
+  return r;
 }

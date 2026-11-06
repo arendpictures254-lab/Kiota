@@ -5,6 +5,7 @@
  */
 import type { Prisma } from "@/generated/prisma/client";
 import { audit } from "@/lib/audit";
+import { saveStudentPhoto } from "./photos";
 import { ForbiddenError, assertCan } from "@/lib/auth/permissions";
 import { withContext, type Tx } from "@/lib/db-core";
 import { normalizePhone } from "@/lib/phone";
@@ -633,36 +634,15 @@ function checkUpload(file: Upload, allowed: string[]) {
   }
 }
 
+/** A photo from the student's page (file or phone camera): see saveStudentPhoto. */
 export async function setStudentPhoto(
-  { db }: Deps,
+  deps: Deps,
   actor: Actor,
   studentId: string,
   file: Upload,
+  source: "upload" | "camera" = "upload",
 ): Promise<void> {
-  assertCan(actor.permissions, "students.edit");
-  checkUpload(file, IMAGE_TYPES);
-  await withContext(db, ctxOf(actor), async (tx) => {
-    const student = await tx.student.findUnique({
-      where: { schoolId: actor.schoolId, id: studentId },
-    });
-    if (!student) throw new ValidationError("Student not found.");
-    const key = schoolKey(actor.schoolId, "students", studentId, `photo-${Date.now()}`);
-    await getStorage().put(key, file.bytes, file.type);
-    await tx.student.update({
-      where: { schoolId: actor.schoolId, id: studentId },
-      data: { photoKey: key },
-    });
-    await audit(tx, {
-      schoolId: actor.schoolId,
-      actorId: actor.userId,
-      action: "student.photo",
-      targetType: "student",
-      targetId: studentId,
-      before: { photoKey: student.photoKey },
-      after: { photoKey: key },
-      ip: actor.ip,
-    });
-  });
+  await saveStudentPhoto(deps, actor, studentId, file, { source });
 }
 
 export async function addStudentDocument(

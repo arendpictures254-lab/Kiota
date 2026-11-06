@@ -8,6 +8,8 @@ export type Bundle = {
   school: { id: string; name: string };
   publicKey: string | null;
   generatedAt: string;
+  /** How early before the leave time a child may go (the school's setting). */
+  earlyExitMinutes?: number;
   passes: GatePass[];
 };
 

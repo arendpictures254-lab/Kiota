@@ -6,7 +6,18 @@ import { AppShell } from "@/components/app-shell";
 import { Button, Card, Loading } from "@/components/ui";
 import { actorFor, deps } from "@/lib/actions";
 import { requireSchool } from "@/lib/auth/context";
+import {
+  attendanceToday,
+  boarderAlerts,
+  canHandleBoarderAlerts,
+  canManageAttendance,
+  canTakeAttendance,
+  myRegisters,
+} from "@/lib/attendance/service";
+import { myStaffDay } from "@/lib/attendance/staff";
 import { dashboardOverview } from "@/lib/dashboard/service";
+import { BoardersToCheck, RegistersToTake, StaffDayCard } from "./attendance-cards";
+import { AttendanceGlance } from "./attendance/widgets";
 import { db } from "@/lib/db";
 import { kes, receiptNo } from "@/lib/fees/allocation";
 import { whenText } from "@/lib/leaveout/rules";
@@ -125,13 +136,18 @@ async function Dashboard() {
   const actor = await actorFor(ctx);
   const supportOn = ctx.school.supportAccessUntil && ctx.school.supportAccessUntil > new Date();
   // Row-level security only returns this person's own notifications.
-  const [notifications, o] = await Promise.all([
+  const p = ctx.permissions;
+  const [notifications, o, staffDay, registers, today, boarders] = await Promise.all([
     db(ctx.dbContext).notification.findMany({
       where: { schoolId: ctx.school.id, readAt: null },
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
     dashboardOverview(deps, actor),
+    myStaffDay(deps, actor).catch(() => null),
+    canTakeAttendance(p) && !canManageAttendance(p) ? myRegisters(deps, actor) : null,
+    canManageAttendance(p) ? attendanceToday(deps, actor) : null,
+    canHandleBoarderAlerts(p) && !canManageAttendance(p) ? boarderAlerts(deps, actor) : null,
   ]);
 
   const collectedPct =
@@ -157,10 +173,17 @@ async function Dashboard() {
         <p className="text-ink/70">{ctx.roles.map((r) => r.name).join(", ")}</p>
       </div>
 
+      {/* The day's first jobs: the register, absent boarders, signing in. */}
+      {registers ? <RegistersToTake r={registers} /> : null}
+      {boarders ? (
+        <BoardersToCheck count={boarders.filter((b) => b.status === "waiting").length} />
+      ) : null}
+      <StaffDayCard day={staffDay} />
+
       {/* Key numbers */}
       <section
         aria-label="Key numbers"
-        className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1"
+        className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5 [&>*:first-child]:col-span-2 md:[&>*:first-child]:col-span-1"
       >
         {o.fees ? (
           <Stat
@@ -215,6 +238,8 @@ async function Dashboard() {
           />
         ) : null}
       </section>
+
+      {today ? <AttendanceGlance t={today} compact /> : null}
 
       {/* What is happening: side by side on a computer */}
       {o.payments || o.waiting || o.notices ? (

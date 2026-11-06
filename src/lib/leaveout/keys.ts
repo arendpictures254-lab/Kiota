@@ -5,6 +5,7 @@
 import { createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
 import type { Tx } from "@/lib/db-core";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { cardMessage, encodeCard } from "@/lib/idcards/card-token";
 import { encodePass, passMessage, randomNonce } from "./pass-token";
 
 export async function schoolPassKey(tx: Tx, schoolId: string) {
@@ -36,4 +37,16 @@ export async function signPass(tx: Tx, schoolId: string, leaveoutId: string) {
     type: "pkcs8",
   });
   return encodePass(message, new Uint8Array(sign(null, Buffer.from(message), pk)));
+}
+
+/** The signed QR token for a student ID card (same school key, its own KC1 format). */
+export async function signCard(tx: Tx, schoolId: string, cardId: string, nonce: string) {
+  const key = await schoolPassKey(tx, schoolId);
+  const message = cardMessage(schoolId, cardId, nonce);
+  const pk = createPrivateKey({
+    key: Buffer.from(decryptSecret(key.privateKeyEnc), "base64"),
+    format: "der",
+    type: "pkcs8",
+  });
+  return encodeCard(message, new Uint8Array(sign(null, Buffer.from(message), pk)));
 }

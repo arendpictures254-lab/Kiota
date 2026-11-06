@@ -33,6 +33,7 @@ export const APP_PREFIXES = [
   "/account",
   "/offline",
   "/gate",
+  "/a",
 ];
 
 export const WHATSAPP_URL = "https://wa.me/254720942426";

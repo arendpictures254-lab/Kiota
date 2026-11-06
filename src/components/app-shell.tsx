@@ -14,6 +14,7 @@ import { chooseModeAction, signOutAction } from "@/app/session-actions";
 import type { PermissionKey } from "@/lib/auth/catalog";
 import { getCurrentUser, getSchoolContext, hasChildren, listMySchools } from "@/lib/auth/context";
 import { db } from "@/lib/db";
+import { canHandleBoarderAlerts, canTakeAttendance } from "@/lib/attendance/service";
 import { canSeeLeaveouts } from "@/lib/leaveout/service";
 import { canSeeMessages } from "@/lib/messaging/service";
 import { SidebarNav, TabBar, type NavItem } from "./app-nav";
@@ -42,6 +43,9 @@ export function schoolNavItems(p: Perms): NavItem[] {
       label: p.has("students.view") ? "Students" : "My students",
       icon: "students",
     });
+  // The register is a class teacher's daily task: high in the list.
+  if (canTakeAttendance(p) || canHandleBoarderAlerts(p))
+    items.push({ href: "/dashboard/attendance", label: "Attendance", icon: "attendance" });
   if (fees && !feesFirst) items.push({ href: "/dashboard/fees", label: "Fees", icon: "fees" });
   if (canSeeLeaveouts(p))
     items.push({ href: "/dashboard/leaveouts", label: "Leave-outs", icon: "leaveouts" });

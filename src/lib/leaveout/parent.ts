@@ -6,10 +6,11 @@
  */
 import type { PrismaClient } from "@/generated/prisma/client";
 import { scopedDb, withContext } from "@/lib/db-core";
+import { sha256 } from "@/lib/crypto";
 import { normalizePhone } from "@/lib/phone";
 import { ValidationError, clean } from "@/lib/service-kit";
 import { nairobiInput } from "./rules";
-import { collectorApproved } from "./service";
+import { collectorApproved, parentCancelled } from "./service";
 import { notifyStaffWith } from "./notify";
 import { messagingActor } from "@/lib/messaging/system";
 import { whenText } from "./rules";
@@ -176,7 +177,11 @@ export async function parentAnswerCollector(
   return true;
 }
 
-/** An SMS reply from a parent: "YES 1234", "NO 1234" (or NDIYO / HAPANA). */
+/**
+ * An SMS reply from a parent: "YES 1234", "NO 1234" (or NDIYO / HAPANA). Switched off: the SMS
+ * now carries a "Tap to approve" link, because an alphanumeric sender ID cannot receive replies.
+ * The webhook only calls this with SMS_REPLIES=on (a two-way number from Africa's Talking).
+ */
 export async function smsCollectorReply(db: PrismaClient, fromPhone: string, text: string) {
   const m = /^\s*(YES|NDIYO|NO|HAPANA)\W*(\d{4})\s*$/i.exec(text);
   const phone = normalizePhone(fromPhone);
@@ -199,5 +204,18 @@ export async function parentCancelLeaveout({ db }: Deps, userId: string, leaveou
         { school_id: string | null }[]
       >`SELECT app_parent_cancel_leaveout(${leaveoutId}::uuid) AS school_id`,
   );
-  return !!row?.school_id;
+  if (!row?.school_id) return false;
+  await parentCancelled(db, row.school_id, leaveoutId).catch((err) =>
+    console.error("[leaveouts] cancellation SMS failed", err),
+  );
+  return true;
+}
+
+/** The parent opened a "Tap to approve" link: the leave-out and their own link to the child. */
+export async function collectorLinkTarget({ db }: Deps, userId: string, token: string) {
+  if (!/^[A-Za-z0-9_-]{20,40}$/.test(token)) return null;
+  const [row] = await scopedDb(db, ctx(userId)).$queryRaw<
+    { link_id: string; leaveout_id: string }[]
+  >`SELECT * FROM app_parent_collector_link(${sha256(token)})`;
+  return row ? { linkId: row.link_id, leaveoutId: row.leaveout_id } : null;
 }

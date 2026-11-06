@@ -8,8 +8,12 @@ import { smsCollectorReply } from "@/lib/leaveout/parent";
  * callback: https://app.kiota.app/api/hooks/sms-in/<SMS_CALLBACK_TOKEN>). Used for a parent's
  * reply approving a leave-out collector: "YES 1234" / "NO 1234" (or NDIYO / HAPANA). The reply
  * only counts from a phone that is a guardian of that child; anything else is ignored.
+ *
+ * Switched off until the school has a two-way number: the approval SMS now carries a link.
+ * Set SMS_REPLIES=on to accept replies again (docs/launch-checklist.md).
  */
 export async function POST(req: Request, { params }: RouteContext<"/api/hooks/sms-in/[token]">) {
+  if (process.env.SMS_REPLIES !== "on") return new Response("Not found", { status: 404 });
   const { token } = await params;
   const expected = process.env.SMS_CALLBACK_TOKEN;
   if (!expected || expected.length < 20) return new Response("Not found", { status: 404 });

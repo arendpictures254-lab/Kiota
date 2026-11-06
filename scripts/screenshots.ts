@@ -64,6 +64,16 @@ async function main() {
     leaveoutId: (
       await owner.leaveout.findFirstOrThrow({ where: { schoolId: bahari.id, status: "out" } })
     ).id,
+    g7East: (
+      await owner.stream.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "East", class: { name: "Grade 7" } },
+      })
+    ).id,
+    morning: (
+      await owner.attendanceSession.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "Morning" },
+      })
+    ).id,
   };
 
   mkdirSync(out, { recursive: true });

@@ -320,6 +320,7 @@ export const MODULES = [
   { key: "academics", label: "Academics (report cards)" },
   { key: "boarding", label: "Boarding (leave-outs)" },
   { key: "pocket_money", label: "Pocket money" },
+  { key: "attendance", label: "Attendance in the parent portal" },
 ] as const;
 
 /** Arend admin: switch optional modules on for a school (the parent portal shows them). */

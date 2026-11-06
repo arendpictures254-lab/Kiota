@@ -5,7 +5,13 @@ import { Loading, Notice } from "@/components/ui";
 import { receiptNo } from "@/lib/fees/allocation";
 import { day, money } from "@/lib/i18n";
 import { portalDeps, requireChild } from "@/lib/portal/context";
-import { childFees, childLabel, childNotices, sections } from "@/lib/portal/service";
+import {
+  childAttendance,
+  childFees,
+  childLabel,
+  childNotices,
+  sections,
+} from "@/lib/portal/service";
 import { FeeSummary } from "../fee-summary";
 import { Avatar, ParentShell } from "../parent-shell";
 
@@ -29,9 +35,10 @@ async function Child({ params, searchParams }: PageProps<"/parent/[linkId]">) {
   const added = (await searchParams).added;
   const { user, children, child, isStaff, t, locale } = await requireChild(linkId);
   const s = sections(child);
-  const [fees, notices] = await Promise.all([
+  const [fees, notices, attendance] = await Promise.all([
     s.fees ? childFees(portalDeps, user.id, linkId) : null,
     s.notices ? childNotices(portalDeps, user.id, linkId) : [],
+    s.attendance ? childAttendance(portalDeps, user.id, linkId) : null,
   ]);
   const unread = notices.filter((n) => !n.readAt).length;
   const placeholders = [
@@ -83,6 +90,13 @@ async function Child({ params, searchParams }: PageProps<"/parent/[linkId]">) {
             ) : null}
             {s.leaveOuts ? (
               <Row href={`/parent/${linkId}/leaveouts`} label={t("child.leaveOuts")} />
+            ) : null}
+            {attendance ? (
+              <Row
+                href={`/parent/${linkId}/attendance`}
+                label={t("child.attendance")}
+                badge={attendance.percent === null ? undefined : `${attendance.percent}%`}
+              />
             ) : null}
             {placeholders.map((p) => (
               <div

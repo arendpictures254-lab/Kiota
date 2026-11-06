@@ -69,6 +69,13 @@ src/lib/leaveout/             Leave-outs: service (request, approve, half term, 
                               gate (bundle, exits/returns, offline sync), pass-token (signed QR,
                               isomorphic), keys (Ed25519), rules (pure), parent (portal)
 src/app/gate/                 Gate scanner (phone, offline: IndexedDB + service worker)
+src/lib/attendance/           Attendance: rules (pure), summary (pure), service (registers,
+                              corrections, absence alerts, dashboards, reports), staff (in/out)
+src/app/dashboard/attendance/ Register, absent boarders, reports + export, staff, settings
+src/lib/idcards/              Student ID cards: card-token (KC1, isomorphic), service, pdf (CR80)
+src/lib/students/photos.ts    Photos: original kept + 4:5 portrait (sharp); photo-match (pure)
+src/lib/settings/service.ts   School settings: leave-out rules and reasons, register times
+src/app/a/[token]/            "Tap to approve" link in the collector SMS (opens the portal)
 src/app/dashboard/leaveouts/  Requests, approvals, passes (A5), who is out, half term, reports
 src/lib/db-guard.ts           School-wall guard for Prisma queries (development and tests)
 src/lib/messaging/            Messaging: units.ts (SMS units), templates, outbox (plan, reserve,
@@ -108,6 +115,7 @@ docs/launch-checklist.md      Everything that must happen before launch. Add to 
 docs/messaging.md             Messaging, and what Africa's Talking, Meta and Safaricom must provide
 docs/parent-portal.md         Parent portal, and how to try it on a phone over Wi-Fi
 docs/leaveouts.md             Leave-outs and the gate, and trying the scanner on a phone
+docs/attendance.md            Attendance, absence alerts, staff attendance, photos, ID cards
 scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
@@ -171,6 +179,14 @@ has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
   admission number and photo onto the leave-out. Pass tokens are signed (Ed25519 per school) and
   carry no student details. Leave-out SMS go out as the school's automatic-messages member (it
   can read guardians); exit, return, pickup code and overdue SMS are critical.
+- **Attendance:** a register is one stream, session and day, submitted once; corrections the same
+  day by whoever took it, later only with `attendance.manage` (audited). Students on leave are
+  `on_leave` and can't be marked absent. Absence SMS are `absence_alerts` the worker sends when
+  due (a correction cancels them); boarders alert `boarding.alerts` staff in the app first.
+  Staff attendance rows are only ever the caller's own (`app_my_membership_id()`) unless
+  `staff_attendance.manage`. Never record a location.
+- **ID cards:** the QR is a `KC1` token naming the card (never student details); a reissue
+  revokes the old card. The gate reads cards only through `app_gate_card()`.
 - **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost
   is reserved in the append-only `wallet_entries` when queued, kept on delivery, refunded on
   failure. Sign-in codes and Kiota's own alerts use `sendPlatformSms()` (Kiota's sender ID, never

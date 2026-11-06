@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import { AttendanceCalendar } from "@/components/attendance-calendar";
+import { studentAttendance } from "@/lib/attendance/service";
+import { canPrintCards, studentCards } from "@/lib/idcards/service";
+import { canManagePhotos } from "@/lib/students/photos";
+import { PhotoCapture } from "./photo-capture";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -26,7 +31,7 @@ import {
   changeStatusAction,
   setSubjectsAction,
   uploadDocumentAction,
-  uploadPhotoAction,
+  reissueCardAction,
 } from "../actions";
 import { StudentsShell, isoDay, kes, loadStudentsActor, showDate } from "../shared";
 import { canSeeMessages } from "@/lib/messaging/service";
@@ -65,6 +70,13 @@ async function Student({ params, searchParams }: Props) {
   if (!s) notFound();
 
   const canEdit = actor.permissions.has("students.edit");
+  const canPhotos = canManagePhotos(actor.permissions);
+  const canCards = canPrintCards(actor.permissions);
+  const [attendance, cards] = await Promise.all([
+    studentAttendance(deps, actor, s.id),
+    canCards ? studentCards(deps, actor, s.id) : null,
+  ]);
+  const liveCard = cards?.find((c) => !c.revokedAt) ?? null;
   const leaveouts = canSeeLeaveouts(actor.permissions)
     ? await studentLeaveouts(deps, actor, s.id)
     : null;
@@ -293,20 +305,80 @@ async function Student({ params, searchParams }: Props) {
           </Card>
         ) : null}
 
-        {canEdit ? (
+        <Card className="flex flex-col gap-3">
+          <h2 className="font-heading text-section font-bold">Attendance</h2>
+          <p className="text-sm text-ink/60">{attendance.period.label}</p>
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-cream p-2">
+              <dt className="text-xs text-ink/60">Attendance</dt>
+              <dd className="font-heading text-xl font-bold text-teal">
+                {attendance.percent === null ? "—" : `${attendance.percent}%`}
+              </dd>
+            </div>
+            <div className="rounded-xl bg-cream p-2">
+              <dt className="text-xs text-ink/60">Days absent</dt>
+              <dd className="font-heading text-xl font-bold text-ink">
+                {attendance.daysAbsent}
+                {attendance.partDays ? (
+                  <span className="text-sm font-normal"> +{attendance.partDays} part</span>
+                ) : null}
+              </dd>
+            </div>
+            <div className="rounded-xl bg-cream p-2">
+              <dt className="text-xs text-ink/60">Late</dt>
+              <dd className="font-heading text-xl font-bold text-ink">{attendance.lates}</dd>
+            </div>
+          </dl>
+          {attendance.days.length ? (
+            <AttendanceCalendar
+              days={attendance.days}
+              from={attendance.period.from}
+              to={attendance.period.to}
+            />
+          ) : (
+            <p className="text-sm text-ink/60">No registers yet.</p>
+          )}
+        </Card>
+
+        {canPhotos ? (
           <Card>
-            <ActionForm action={uploadPhotoAction} submitLabel="Save photo" variant="secondary">
-              <h2 className="font-heading text-section font-bold">Photo</h2>
-              <input type="hidden" name="studentId" value={s.id} />
-              <Field
-                label="Photo (JPG or PNG, up to 5 MB)"
-                name="file"
-                id="photo-file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                required
-              />
-            </ActionForm>
+            <PhotoCapture studentId={s.id} />
+          </Card>
+        ) : null}
+
+        {canCards ? (
+          <Card className="flex flex-col gap-3">
+            <h2 className="font-heading text-section font-bold">ID card</h2>
+            <p className="text-sm text-ink/70">
+              {liveCard
+                ? `Card issued ${showDate(liveCard.issuedAt)}, valid until ${liveCard.validUntilYear}.`
+                : "No card yet: printing the class's cards issues one."}
+              {cards && cards.length > 1
+                ? ` ${cards.length - 1} older card(s) no longer work.`
+                : ""}
+            </p>
+            <ButtonLink href={`/dashboard/idcards?student=${s.id}`} variant="secondary">
+              Print this card
+            </ButtonLink>
+            {liveCard ? (
+              <details>
+                <summary className="cursor-pointer text-sm font-semibold text-teal">
+                  Lost or damaged? Reissue the card
+                </summary>
+                <ActionForm
+                  action={reissueCardAction}
+                  submitLabel="Reissue card"
+                  variant="danger"
+                  className="mt-3 flex flex-col gap-3"
+                >
+                  <input type="hidden" name="studentId" value={s.id} />
+                  <Field label="Why" name="reason" id="card-reason" placeholder="Lost" required />
+                  <p className="text-sm text-ink/60">
+                    The old card stops working at the gate straight away.
+                  </p>
+                </ActionForm>
+              </details>
+            ) : null}
           </Card>
         ) : null}
 

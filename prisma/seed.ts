@@ -6,6 +6,7 @@ import "dotenv/config";
 import { createClient } from "../src/lib/db-core";
 import { seedFees } from "./seed-fees";
 import { seedMessageHistory, seedWallets } from "./seed-messaging";
+import { seedAttendance } from "./seed-attendance";
 import { seedLeaveouts } from "./seed-leaveouts";
 import { seedPortal } from "./seed-portal";
 import { seedStudents } from "./seed-students";
@@ -25,6 +26,11 @@ export const SEED = {
         { phone: "+254711000003", name: "Grace Wanjiru", roles: ["class_teacher"] },
         { phone: "+254711000004", name: "Hassan Ali", roles: ["gate_guard"] },
         { phone: "+254711000005", name: "Mercy Chebet", roles: ["boarding_master"] },
+        { phone: "+254711000006", name: "Joseph Mwangi", roles: ["principal"] },
+        { phone: "+254711000007", name: "Zawadi Mohamed", roles: ["matron"] },
+        { phone: "+254711000008", name: "Lucy Wambui", roles: ["secretary"] },
+        { phone: "+254711000009", name: "Daniel Ochieng", roles: ["class_teacher"] },
+        { phone: "+254711000010", name: "Ruth Njoroge", roles: ["class_teacher"] },
       ],
     },
     {
@@ -128,6 +134,7 @@ async function main() {
     await seedMessageHistory(owner, messagingSchools);
     await seedPortal(owner, schoolIds);
     await seedLeaveouts(owner, schoolIds.get("Bahari Academy")!);
+    await seedAttendance(owner, schoolIds.get("Bahari Academy")!);
 
     console.log(
       "Seeded Bahari Academy, Milima School, their students, fees, messaging wallets and the Arend admin.",
