@@ -24,7 +24,12 @@ async function Pay({ params }: Pick<PageProps<"/parent/[linkId]/pay">, "params">
   const { user, children, child, isStaff, t } = await requireChild(linkId);
   const fees = child.receivesFees ? await childFees(portalDeps, user.id, linkId) : null;
   if (!fees) notFound();
-  const due = Math.max(0, Math.ceil(fees.balanceCents / 100));
+  // Default: what is due now; when nothing is, the next instalment (or the balance).
+  const suggestedCents =
+    fees.dueNowCents > 0
+      ? fees.dueNowCents
+      : (fees.nextDue?.amountCents ?? Math.max(0, fees.balanceCents));
+  const due = Math.ceil(suggestedCents / 100);
 
   return (
     <ParentShell
@@ -45,7 +50,7 @@ async function Pay({ params }: Pick<PageProps<"/parent/[linkId]/pay">, "params">
           defaultPhone={formatPhone(user.phone)}
           text={{
             ...pick(t, ["pay.amount", "pay.phone", "pay.phoneHint", "pay.send", "pay.sending"]),
-            amountHint: due ? t("pay.amountHint", { amount: money(fees.balanceCents) }) : "",
+            amountHint: due ? t("pay.amountHint", { amount: money(suggestedCents) }) : "",
             paysTo: t("pay.paysTo", {
               school: child.schoolName,
               admission: child.admissionNumber ?? "",

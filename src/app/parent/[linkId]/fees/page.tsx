@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ButtonLink, Card, Loading, Notice } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { receiptNo } from "@/lib/fees/allocation";
 import { day, type MessageKey, money } from "@/lib/i18n";
 import { portalDeps, requireChild } from "@/lib/portal/context";
 import { childFees } from "@/lib/portal/service";
+import { FeeSummary } from "../../fee-summary";
 import { ParentShell } from "../../parent-shell";
 
 export const metadata: Metadata = { title: "Fees · Kiota" };
@@ -35,23 +36,7 @@ async function Fees({ params }: Pick<PageProps<"/parent/[linkId]/fees">, "params
       title={`${t("fees.title")}: ${child.firstName}`}
       back={{ href: `/parent/${linkId}`, label: child.firstName }}
     >
-      <Card className="flex flex-col gap-3">
-        <div>
-          <p className="text-sm text-ink/70">{t("fees.balance")}</p>
-          <p className="font-heading text-3xl font-bold text-ink" data-testid="fees-balance">
-            {fees.balanceCents >= 0
-              ? money(fees.balanceCents)
-              : t("child.inCredit", { amount: money(-fees.balanceCents) })}
-          </p>
-        </div>
-        {fees.balanceCents > 0 ? (
-          fees.mpesa ? (
-            <ButtonLink href={`/parent/${linkId}/pay`}>{t("fees.pay")}</ButtonLink>
-          ) : (
-            <Notice>{t("fees.noMpesa")}</Notice>
-          )
-        ) : null}
-      </Card>
+      <FeeSummary fees={fees} linkId={linkId} t={t} locale={locale} />
 
       {fees.voteHeads.length ? (
         <section className="flex flex-col gap-2">

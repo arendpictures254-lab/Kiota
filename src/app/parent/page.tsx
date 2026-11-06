@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Card, Loading, Notice } from "@/components/ui";
-import { day, money } from "@/lib/i18n";
+import { money } from "@/lib/i18n";
 import { portalDeps, requireParent } from "@/lib/portal/context";
 import { type Attention, childLabel, familyOverview } from "@/lib/portal/service";
 import { Avatar, ParentShell } from "./parent-shell";
@@ -19,7 +19,7 @@ export default function ParentHomePage({ searchParams }: PageProps<"/parent">) {
 
 async function Home({ searchParams }: Pick<PageProps<"/parent">, "searchParams">) {
   const declined = (await searchParams).declined;
-  const { user, children, isStaff, t, locale } = await requireParent();
+  const { user, children, isStaff, t } = await requireParent();
   const o = await familyOverview(portalDeps, user.id);
   const live = o.perChild;
 
@@ -32,16 +32,14 @@ async function Home({ searchParams }: Pick<PageProps<"/parent">, "searchParams">
           action: t("pending.review"),
           tone: "border-teal/40 bg-egg-blue/20",
         };
-      case "overdue":
+      case "due":
         return {
           href: `/parent/${a.linkId}/fees`,
-          text: a.since
-            ? t("home.overdue", {
-                child: a.child,
-                amount: money(a.amountCents),
-                date: day(a.since, locale),
-              })
-            : t("home.overdueOld", { child: a.child, amount: money(a.amountCents) }),
+          text:
+            t("home.dueNow", { child: a.child, amount: money(a.amountCents) }) +
+            (a.arrearsCents
+              ? ` · ${t("fees.includesArrears", { amount: money(a.arrearsCents) })}`
+              : ""),
           action: t("fees.pay"),
           tone: "border-status-overdue/30 bg-status-overdue/5",
         };
@@ -131,14 +129,18 @@ async function Home({ searchParams }: Pick<PageProps<"/parent">, "searchParams">
                     {fees ? (
                       <span
                         className={
-                          fees.balanceCents > 0
-                            ? fees.overdueCents > 0
-                              ? "font-semibold text-status-overdue"
-                              : "font-semibold text-status-due"
-                            : "font-semibold text-status-paid"
+                          fees.dueNowCents > 0
+                            ? "font-semibold text-status-overdue"
+                            : fees.balanceCents > 0
+                              ? "font-semibold text-status-due"
+                              : "font-semibold text-status-paid"
                         }
                       >
-                        {fees.balanceCents > 0 ? money(fees.balanceCents) : t("child.paidUp")}
+                        {fees.dueNowCents > 0
+                          ? t("child.dueNow", { amount: money(fees.dueNowCents) })
+                          : fees.balanceCents > 0
+                            ? money(fees.balanceCents)
+                            : t("child.paidUp")}
                       </span>
                     ) : null}
                     {unread ? (

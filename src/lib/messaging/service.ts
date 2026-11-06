@@ -221,7 +221,7 @@ export function parseNoticeInput(raw: Record<string, unknown>): NoticeInput {
 }
 
 /** "school", "boarders", "day", "level:<id>", "class:<id>" or "stream:<id>". */
-async function resolveAudience(tx: Tx, schoolId: string, audience: string) {
+export async function resolveAudience(tx: Tx, schoolId: string, audience: string) {
   const [kind, id] = audience.split(":");
   switch (kind) {
     case "school":

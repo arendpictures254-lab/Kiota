@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { homeFor } from "./service";
+import { homeFor, splitBalance } from "./service";
 
 const base = { staffSchools: 0, isPlatformAdmin: false, hasChildren: false, mode: null } as const;
 
@@ -21,5 +21,64 @@ describe("where people land after signing in", () => {
 
   it("ignores a parent mode for someone who has no children", () => {
     expect(homeFor({ ...base, staffSchools: 1, mode: "parent" })).toBe("/dashboard");
+  });
+});
+
+describe("what a parent is asked to pay", () => {
+  // Term 1: 50% by 15 Jan, 30% by 15 Feb, 20% by 15 Mar, on a KES 40,000 invoice.
+  const invoice = {
+    totalCents: 4_000_000,
+    installments: [
+      { dueDate: new Date("2027-01-15T00:00:00+03:00"), percentBp: 5000 },
+      { dueDate: new Date("2027-02-15T00:00:00+03:00"), percentBp: 3000 },
+      { dueDate: new Date("2027-03-15T00:00:00+03:00"), percentBp: 2000 },
+    ],
+  };
+
+  it("before the first date: nothing due now, the rest of the year with the next date", () => {
+    expect(splitBalance(4_000_000, invoice, new Date("2027-01-02T09:00:00+03:00"))).toEqual({
+      dueNowCents: 0,
+      restOfYearCents: 4_000_000,
+      arrearsCents: 0,
+      nextDue: { date: invoice.installments[0].dueDate, amountCents: 2_000_000 },
+    });
+  });
+
+  it("counts an instalment due today as due now", () => {
+    const today = new Date("2027-01-15T10:00:00+03:00");
+    expect(splitBalance(4_000_000, invoice, today)).toMatchObject({
+      dueNowCents: 2_000_000,
+      restOfYearCents: 2_000_000,
+      arrearsCents: 0,
+      nextDue: { amountCents: 1_200_000 },
+    });
+  });
+
+  it("calls only balances from previous terms arrears", () => {
+    // KES 5,000 left from last term on top of this term's invoice.
+    const s = splitBalance(4_500_000, invoice, new Date("2027-01-02T09:00:00+03:00"));
+    expect(s).toMatchObject({
+      dueNowCents: 500_000,
+      arrearsCents: 500_000,
+      restOfYearCents: 4_000_000,
+    });
+  });
+
+  it("a part payment comes off what is due now first", () => {
+    const s = splitBalance(3_000_000, invoice, new Date("2027-01-20T09:00:00+03:00"));
+    expect(s).toMatchObject({
+      dueNowCents: 1_000_000,
+      arrearsCents: 0,
+      restOfYearCents: 2_000_000,
+    });
+  });
+
+  it("nothing is due from a child in credit", () => {
+    expect(splitBalance(-50_000, invoice, new Date("2027-02-20T09:00:00+03:00"))).toMatchObject({
+      dueNowCents: 0,
+      restOfYearCents: 0,
+      arrearsCents: 0,
+      nextDue: null,
+    });
   });
 });

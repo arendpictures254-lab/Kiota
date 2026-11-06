@@ -65,6 +65,11 @@ src/app/parent/               Parent portal (children, fees, pay, notices, confi
 src/app/choose/, account/     Staff-or-parent choice; account (language, sessions)
 src/lib/portal/               Parent portal service (all reads through app_parent_* functions)
 src/lib/i18n/                 Parent-facing strings: en.ts, sw.ts (one file per language)
+src/lib/leaveout/             Leave-outs: service (request, approve, half term, reports, overdue),
+                              gate (bundle, exits/returns, offline sync), pass-token (signed QR,
+                              isomorphic), keys (Ed25519), rules (pure), parent (portal)
+src/app/gate/                 Gate scanner (phone, offline: IndexedDB + service worker)
+src/app/dashboard/leaveouts/  Requests, approvals, passes (A5), who is out, half term, reports
 src/lib/db-guard.ts           School-wall guard for Prisma queries (development and tests)
 src/lib/messaging/            Messaging: units.ts (SMS units), templates, outbox (plan, reserve,
                               queue), service.ts (payments, reminders, notices, log), worker.ts
@@ -98,6 +103,7 @@ Dockerfile, docker-compose.prod.yml, deploy/   Single-server production setup (d
 docs/launch-checklist.md      Everything that must happen before launch. Add to it.
 docs/messaging.md             Messaging, and what Africa's Talking, Meta and Safaricom must provide
 docs/parent-portal.md         Parent portal, and how to try it on a phone over Wi-Fi
+docs/leaveouts.md             Leave-outs and the gate, and trying the scanner on a phone
 scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
@@ -157,6 +163,10 @@ has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
   for confirmation shows only the school's name and the child's first name. Never give a parent a
   school context or read school tables for them directly. Parent-facing text goes through
   `src/lib/i18n` (keys in en.ts and sw.ts), never inline strings.
+- **Leave-outs:** the gate (gate.scan) never reads student records: approval copies name, class,
+  admission number and photo onto the leave-out. Pass tokens are signed (Ed25519 per school) and
+  carry no student details. Leave-out SMS go out as the school's automatic-messages member (it
+  can read guardians); exit, return, pickup code and overdue SMS are critical.
 - **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost
   is reserved in the append-only `wallet_entries` when queued, kept on delivery, refunded on
   failure. Sign-in codes and Kiota's own alerts use `sendPlatformSms()` (Kiota's sender ID, never
@@ -246,3 +256,6 @@ npm run build
   and tests before any screens.
 - Tests are required for money, permissions and school walls.
 - Never commit `.env` or real school data.
+- **Never edit a migration that has been pushed, or applied anywhere other than your own machine**
+  (staging, production, a teammate's database, CI). Fix it with a new migration. Only a migration
+  that exists solely in your local, unpushed work may be changed, and then reset your database.

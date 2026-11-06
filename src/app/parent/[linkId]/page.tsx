@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ButtonLink, Card, Loading, Notice } from "@/components/ui";
-import { day, money } from "@/lib/i18n";
+import { Loading, Notice } from "@/components/ui";
 import { portalDeps, requireChild } from "@/lib/portal/context";
 import { childFees, childLabel, childNotices, sections } from "@/lib/portal/service";
+import { FeeSummary } from "../fee-summary";
 import { Avatar, ParentShell } from "../parent-shell";
 
 export const metadata: Metadata = { title: "Kiota" };
@@ -29,7 +29,6 @@ async function Child({ params, searchParams }: PageProps<"/parent/[linkId]">) {
   const unread = notices.filter((n) => !n.readAt).length;
   const placeholders = [
     s.reportCards ? t("child.reportCards") : null,
-    s.leaveOuts ? t("child.leaveOuts") : null,
     s.pocketMoney ? t("child.pocketMoney") : null,
   ].filter((x): x is string => !!x);
 
@@ -52,38 +51,7 @@ async function Child({ params, searchParams }: PageProps<"/parent/[linkId]">) {
         </div>
       </div>
 
-      {fees ? (
-        <Card className="flex flex-col gap-3">
-          <div>
-            <p className="text-sm text-ink/70">{t("fees.balance")}</p>
-            <p
-              className={`font-heading text-3xl font-bold ${
-                fees.balanceCents > 0
-                  ? fees.overdueCents > 0
-                    ? "text-status-overdue"
-                    : "text-ink"
-                  : "text-status-paid"
-              }`}
-              data-testid="child-balance"
-            >
-              {fees.balanceCents > 0
-                ? money(fees.balanceCents)
-                : fees.balanceCents < 0
-                  ? t("child.inCredit", { amount: money(-fees.balanceCents) })
-                  : t("child.paidUp")}
-            </p>
-            {fees.overdueCents > 0 ? (
-              <p className="text-sm font-semibold text-status-overdue">
-                {t("fees.overdueAmount", { amount: money(fees.overdueCents) })}
-                {fees.overdueSince ? ` · ${day(fees.overdueSince, locale)}` : ""}
-              </p>
-            ) : null}
-          </div>
-          {fees.balanceCents > 0 && fees.mpesa ? (
-            <ButtonLink href={`/parent/${linkId}/pay`}>{t("fees.pay")}</ButtonLink>
-          ) : null}
-        </Card>
-      ) : null}
+      {fees ? <FeeSummary fees={fees} linkId={linkId} t={t} locale={locale} /> : null}
 
       <nav className="flex flex-col gap-2">
         {s.fees ? <Row href={`/parent/${linkId}/fees`} label={t("child.fees")} /> : null}
@@ -93,6 +61,9 @@ async function Child({ params, searchParams }: PageProps<"/parent/[linkId]">) {
             label={t("child.notices")}
             badge={unread ? t("child.newNotices", { n: unread }) : undefined}
           />
+        ) : null}
+        {s.leaveOuts ? (
+          <Row href={`/parent/${linkId}/leaveouts`} label={t("child.leaveOuts")} />
         ) : null}
         {placeholders.map((p) => (
           <div

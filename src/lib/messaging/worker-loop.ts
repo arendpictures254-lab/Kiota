@@ -1,9 +1,10 @@
 /**
- * Runs the sending worker inside the app server: every few seconds, and straight away when a
+ * Runs the sending worker inside the app server (and the leave-out overdue check): every few seconds, and straight away when a
  * screen queues something (kickMessageWorker). Started once by src/instrumentation.ts. Safe with
  * several servers: messages are claimed with FOR UPDATE SKIP LOCKED.
  */
 import type { PrismaClient } from "@/generated/prisma/client";
+import { checkOverdueLeaveouts } from "@/lib/leaveout/service";
 import { processDueMessages } from "./worker";
 
 let db: PrismaClient | null = null;
@@ -18,6 +19,10 @@ async function run() {
   }
   running = true;
   try {
+    // Students not back on time first: their parents' SMS then go out in the same run.
+    await checkOverdueLeaveouts(db).catch((err) =>
+      console.error("[leaveouts] overdue check failed", err),
+    );
     await processDueMessages(db);
   } catch (err) {
     console.error("[messaging] worker run failed", err);

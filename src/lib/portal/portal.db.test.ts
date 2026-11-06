@@ -270,10 +270,11 @@ describe("one family, many schools", () => {
     });
     const o = await familyOverview(deps, p.id);
     expect(o.totalBalanceCents).toBe(300_000);
-    expect(o.attention.map((x) => x.kind).sort()).toEqual(["overdue", "pending"]);
-    expect(o.attention.find((x) => x.kind === "overdue")).toMatchObject({
+    expect(o.attention.map((x) => x.kind).sort()).toEqual(["due", "pending"]);
+    // No invoice this term: the whole balance is arrears from earlier terms, due now.
+    expect(o.attention.find((x) => x.kind === "due")).toMatchObject({
       amountCents: 300_000,
-      since: null, // older arrears, not a missed instalment
+      arrearsCents: 300_000,
     });
   });
 });

@@ -9,6 +9,8 @@
  *   npm run sms:simulate -- fail --to 0712345678 --reason AbsentSubscriber
  *   npm run sms:simulate -- fail --id console-...          (one SMS by its id)
  *   npm run sms:simulate -- list                           (the newest SMS and whether reported)
+ *   npm run sms:simulate -- reply --from 0744000001 --text "YES 1234"
+ *                                     (a parent answers a leave-out collector request by SMS)
  *
  * Options: --base http://localhost:3000 (the app's address, default SIMULATOR_BASE_URL or
  * http://localhost:3000), --outbox .dev/sms-outbox.log. Reports for sign-in codes (which are not
@@ -111,6 +113,25 @@ async function main() {
     return;
   }
 
+  if (command === "reply") {
+    const from = normalizePhone(arg("from") ?? "");
+    const text = arg("text");
+    if (!from || !text) throw new Error('Use --from 0744000001 --text "YES 1234"');
+    const res = await fetch(`${base}/api/hooks/sms-in/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        from,
+        to: "KIOTA",
+        text,
+        date: new Date().toISOString(),
+        id: `sim-${Date.now()}`,
+      }),
+    });
+    console.log(`Reply from ${from}: "${text}" -> ${res.status} ${await res.text()}`);
+    return;
+  }
+
   if (command === "fail") {
     const m = chosen.at(-1);
     if (!m) throw new Error("No SMS found. Send one from Kiota first.");
@@ -120,7 +141,7 @@ async function main() {
     return;
   }
 
-  console.log("Commands: deliver, fail, list. See the top of scripts/sms-simulate.ts.");
+  console.log("Commands: deliver, fail, reply, list. See the top of scripts/sms-simulate.ts.");
   process.exit(2);
 }
 

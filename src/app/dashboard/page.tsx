@@ -4,6 +4,8 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { Button, ButtonLink, Card, Loading, Shell } from "@/components/ui";
 import { listMySchools, requireSchool } from "@/lib/auth/context";
 import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { canSeeLeaveouts } from "@/lib/leaveout/service";
 import { canSeeMessages } from "@/lib/messaging/service";
 import { markNotificationReadAction } from "./fees/actions";
 import { supportAccessAction } from "./actions";
@@ -24,6 +26,12 @@ async function Dashboard() {
   const ctx = await requireSchool();
   const schools = await listMySchools(ctx.user.id);
   const can = (k: Parameters<typeof ctx.permissions.has>[0]) => ctx.permissions.has(k);
+  // A gate guard sees only the gate screens.
+  if (
+    can("gate.scan") &&
+    [...ctx.permissions].every((k) => k === "gate.scan" || k === "school.view")
+  )
+    redirect("/gate");
   const supportOn = ctx.school.supportAccessUntil && ctx.school.supportAccessUntil > new Date();
   // Row-level security only returns this person's own notifications.
   const notifications = await db(ctx.dbContext).notification.findMany({
@@ -76,6 +84,16 @@ async function Dashboard() {
       {fees && !feesFirst ? (
         <ButtonLink href="/dashboard/fees" variant="secondary">
           Fees
+        </ButtonLink>
+      ) : null}
+      {canSeeLeaveouts(ctx.permissions) ? (
+        <ButtonLink href="/dashboard/leaveouts" variant="secondary">
+          Leave-outs
+        </ButtonLink>
+      ) : null}
+      {can("gate.scan") && !canSeeLeaveouts(ctx.permissions) ? (
+        <ButtonLink href="/gate" variant="secondary">
+          Gate scanner
         </ButtonLink>
       ) : null}
       {canSeeMessages(ctx.permissions) ? (

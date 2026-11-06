@@ -147,6 +147,12 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
     ],
   },
   {
+    key: "matron",
+    name: "Matron",
+    description: "Boarders' welfare: leave-out requests and sick bay.",
+    permissions: ["school.view", "leaveout.request", "sickbay.view", "students.view"],
+  },
+  {
     key: "storekeeper",
     name: "Storekeeper",
     description: "Stock in, stock out, uniform issue and food store usage.",
@@ -162,8 +168,9 @@ export const BUILT_IN_ROLES: readonly BuiltInRole[] = [
   {
     key: "system_messaging",
     name: "Automatic messages",
-    description: "Kiota itself, sending queued messages and recording delivery reports.",
-    permissions: ["messages.view_all", "students.view", "fees.view"],
+    description:
+      "Kiota itself: queued messages, delivery reports, and alerts when a student is late back.",
+    permissions: ["messages.view_all", "students.view", "fees.view", "boarding.manage"],
     hidden: true,
   },
   {

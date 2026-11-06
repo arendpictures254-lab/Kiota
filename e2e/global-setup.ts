@@ -41,5 +41,9 @@ export default async function globalSetup() {
     "UPDATE guardian_links SET language = 'en' WHERE user_id IN (SELECT id FROM users WHERE phone = '+254744000001')",
   );
   await owner.query("DELETE FROM sessions");
+  // Leave-outs from earlier runs of the leave-out journey are closed, so each run starts clean.
+  await owner.query(
+    "UPDATE leaveouts SET status = 'cancelled' WHERE details LIKE 'E2E %' AND status <> 'cancelled'",
+  );
   await owner.end();
 }

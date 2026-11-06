@@ -30,16 +30,20 @@ development: the 6-digit code prints in the terminal running `npm run dev` (and 
 
 You can type them as `0711 000 001` or `+254711000001`.
 
-| Phone        | Name          | School         | Role                                     |
-| ------------ | ------------- | -------------- | ---------------------------------------- |
-| 0700 000 001 | Arend Admin   | (platform)     | Arend Studio admin: creates schools      |
-| 0711 000 001 | Amina Said    | Bahari Academy | Director                                 |
-| 0711 000 002 | Peter Otieno  | Bahari Academy | Bursar                                   |
-| 0711 000 003 | Grace Wanjiru | Bahari Academy | Class teacher                            |
-| 0722 000 001 | John Kamau    | Milima School  | Director                                 |
-| 0722 000 002 | Mary Achieng  | Milima School  | Bursar                                   |
-| 0722 000 003 | David Kiprono | Milima School  | Class teacher                            |
-| 0733 000 001 | Faith Njeri   | Both schools   | Subject teacher (sees the school picker) |
+| Phone        | Name                   | School         | Role                                     |
+| ------------ | ---------------------- | -------------- | ---------------------------------------- |
+| 0700 000 001 | Arend Admin            | (platform)     | Arend Studio admin: creates schools      |
+| 0711 000 001 | Amina Said             | Bahari Academy | Director                                 |
+| 0711 000 002 | Peter Otieno           | Bahari Academy | Bursar                                   |
+| 0711 000 003 | Grace Wanjiru          | Bahari Academy | Class teacher, and Kibet's mother        |
+| 0711 000 004 | Hassan Ali             | Bahari Academy | Gate guard: sees only the gate scanner   |
+| 0711 000 005 | Mercy Chebet           | Bahari Academy | Boarding master, may approve leave-outs  |
+| 0722 000 001 | John Kamau             | Milima School  | Director                                 |
+| 0722 000 002 | Mary Achieng           | Milima School  | Bursar                                   |
+| 0722 000 003 | David Kiprono          | Milima School  | Class teacher                            |
+| 0733 000 001 | Faith Njeri            | Both schools   | Subject teacher (sees the school picker) |
+| 0744 000 001 | Wanjiku Kamau          | Both schools   | Parent (Brian at Bahari, Joy at Milima)  |
+| 0755 000 001 | Kilifi Education Trust | Bahari Academy | Sponsor: sees fees only                  |
 
 Each number can request 3 codes per 15 minutes.
 
@@ -48,8 +52,12 @@ Grace Wanjiru is class teacher of Grade 7 East, so she sees only those 15 studen
 **Seeded students.** Bahari Academy has 61 students in Grade 7 and Grade 8 (East and West
 streams), each with one or two guardians, plus houses, dormitories and the 2027 terms.
 Wanjiku Kamau (0744 000 001) is a parent with Brian at Bahari Academy and Joy at Milima School;
-her Milima link is waiting for her to confirm in the parent portal (a later phase). She cannot
-sign in yet: parents get the portal later.
+her Milima link waits for her to confirm in the parent portal (docs/parent-portal.md).
+
+**Seeded leave-outs** (Bahari Academy, docs/leaveouts.md): one approved pass for today
+(BA/2025/011, ready to scan), one student out (BA/2025/012), one overdue back (BA/2025/013),
+a declined request, and Wanjiku's request for Brian waiting for Mercy to approve. Pickup codes
+go to the collectors by (console) SMS: see `.dev/sms-outbox.log`.
 
 ## Trying the import
 

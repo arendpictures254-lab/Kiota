@@ -115,37 +115,42 @@ test("a number no school has added cannot sign up", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("the parent home stays light on a slow 3G connection", async ({ page }) => {
-  await signIn(page, "0744000001", "+254744000001");
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Network.enable");
-  // "Slow 3G"-like: 400 ms round trips, about 50 KB/s down.
-  await cdp.send("Network.emulateNetworkConditions", {
-    offline: false,
-    latency: 400,
-    downloadThroughput: (400 * 1024) / 8,
-    uploadThroughput: (400 * 1024) / 8,
+test.describe("a first visit on a slow phone connection", () => {
+  // No service worker: it would serve the scripts from its own cache (a returning visit).
+  test.use({ serviceWorkers: "block" });
+
+  test("the parent home stays light on a slow 3G connection", async ({ page }) => {
+    await signIn(page, "0744000001", "+254744000001");
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Network.enable");
+    // "Slow 3G"-like: 400 ms round trips, about 50 KB/s down.
+    await cdp.send("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 400,
+      downloadThroughput: (400 * 1024) / 8,
+      uploadThroughput: (400 * 1024) / 8,
+    });
+    // A first visit: nothing cached (the worst case on a new phone).
+    await cdp.send("Network.clearBrowserCache");
+    let bytes = 0;
+    cdp.on("Network.loadingFinished", (e) => {
+      bytes += e.encodedDataLength;
+    });
+    const started = Date.now();
+    await page.goto("/parent", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "All children" })).toBeVisible();
+    const seconds = (Date.now() - started) / 1000;
+    await page.waitForLoadState("networkidle");
+    const summary = `parent home on slow 3G: ${seconds.toFixed(1)} s to content, ${(bytes / 1024).toFixed(0)} KB transferred`;
+    console.log(summary);
+    test.info().annotations.push({
+      type: "3G",
+      description: `parent home: ${seconds.toFixed(1)} s to content, ${(bytes / 1024).toFixed(0)} KB transferred (empty browser cache)`,
+    });
+    // Measured at about 1.4 s and 246 KB (mostly the React runtime and two fonts) in Nov 2026.
+    expect(seconds).toBeLessThan(5);
+    expect(bytes).toBeLessThan(300 * 1024);
   });
-  // A first visit: nothing cached (the worst case on a new phone).
-  await cdp.send("Network.clearBrowserCache");
-  let bytes = 0;
-  cdp.on("Network.loadingFinished", (e) => {
-    bytes += e.encodedDataLength;
-  });
-  const started = Date.now();
-  await page.goto("/parent", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "All children" })).toBeVisible();
-  const seconds = (Date.now() - started) / 1000;
-  await page.waitForLoadState("networkidle");
-  const summary = `parent home on slow 3G: ${seconds.toFixed(1)} s to content, ${(bytes / 1024).toFixed(0)} KB transferred`;
-  console.log(summary);
-  test.info().annotations.push({
-    type: "3G",
-    description: `parent home: ${seconds.toFixed(1)} s to content, ${(bytes / 1024).toFixed(0)} KB transferred (empty browser cache)`,
-  });
-  // Measured at about 1.4 s and 246 KB (mostly the React runtime and two fonts) in Nov 2026.
-  expect(seconds).toBeLessThan(5);
-  expect(bytes).toBeLessThan(300 * 1024);
 });
 
 test("the Director invites one stream's parents after seeing the cost", async ({ page }) => {

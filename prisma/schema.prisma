@@ -77,6 +77,9 @@ model User {
   sessions      Session[]
   guardianLinks GuardianLink[]
 
+  noticeReads    NoticeRead[]
+  portalPayments MpesaTransaction[] @relation("PortalPayments")
+
   @@map("users")
 }
 
@@ -463,6 +466,8 @@ model Student {
   subjects       StudentSubject[]
   documents      StudentDocument[]
   openingBalance OpeningBalance?
+
+  leaveouts Leaveout[]
 
   @@unique([schoolId, admissionNumber])
   @@unique([schoolId, id])
@@ -1016,6 +1021,7 @@ model MpesaTransaction {
   raw               Json
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  portalUser        User?     @relation("PortalPayments", fields: [portalUserId], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, transId])
   @@index([schoolId, status])
@@ -1174,6 +1180,7 @@ model MessageCampaign {
   createdById String         @map("created_by_id") @db.Uuid
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   school      School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  reads       NoticeRead[]
 
   @@index([schoolId, createdAt])
   @@map("message_campaigns")
@@ -1232,12 +1239,137 @@ model Message {
 
 /// Who read which notice in the parent portal (the school sees read counts per notice).
 model NoticeRead {
-  schoolId   String   @map("school_id") @db.Uuid
-  campaignId String   @map("campaign_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  readAt     DateTime @default(now()) @map("read_at") @db.Timestamptz(3)
+  schoolId   String          @map("school_id") @db.Uuid
+  campaignId String          @map("campaign_id") @db.Uuid
+  userId     String          @map("user_id") @db.Uuid
+  readAt     DateTime        @default(now()) @map("read_at") @db.Timestamptz(3)
+  campaign   MessageCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([campaignId, userId])
   @@index([schoolId, campaignId])
   @@map("notice_reads")
+}
+
+/// A leave-out (exeat): the request, its approval, the gate pass, and the exit and return.
+/// The student's name, class, admission number and photo are copied in when it is requested,
+/// so the gate guard can check the pass without access to student records.
+model Leaveout {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId              String    @map("school_id") @db.Uuid
+  studentId             String    @map("student_id") @db.Uuid
+  reasonId              String?   @map("reason_id") @db.Uuid
+  /// The reason as chosen (the school's list) and any details.
+  reason                String
+  details               String?
+  leaveAt               DateTime  @map("leave_at") @db.Timestamptz(3)
+  returnAt              DateTime  @map("return_at") @db.Timestamptz(3)
+  /// "guardian" (marked authorised to collect) or "other" (a person the parent approves).
+  collectorKind         String    @map("collector_kind")
+  collectorLinkId       String?   @map("collector_link_id") @db.Uuid
+  collectorName         String    @map("collector_name")
+  collectorPhone        String    @map("collector_phone")
+  collectorRelationship String    @map("collector_relationship")
+  /// 4 digits the parent replies with ("YES 1234") to approve another collector.
+  collectorConfirmCode  String?   @map("collector_confirm_code")
+  collectorApprovedAt   DateTime? @map("collector_approved_at") @db.Timestamptz(3)
+  collectorApprovedById String?   @map("collector_approved_by_id") @db.Uuid
+  /// awaiting_parent, pending, approved, declined, cancelled, out, returned
+  status                String
+  /// "staff", "parent" or "bulk" (half term).
+  requestedVia          String    @map("requested_via")
+  requestedById         String    @map("requested_by_id") @db.Uuid
+  decidedById           String?   @map("decided_by_id") @db.Uuid
+  decidedAt             DateTime? @map("decided_at") @db.Timestamptz(3)
+  declineReason         String?   @map("decline_reason")
+  cancelledById         String?   @map("cancelled_by_id") @db.Uuid
+  cancelledAt           DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason          String?   @map("cancel_reason")
+  /// Signed gate pass token (KP1....): carries no student details.
+  passToken             String?   @unique @map("pass_token")
+  /// SHA-256 of "<leaveout id>:<pickup code>" (the gate checks the code offline).
+  pickupCodeHash        String?   @map("pickup_code_hash")
+  studentName           String    @map("student_name")
+  admissionNumber       String    @map("admission_number")
+  classLabel            String    @map("class_label")
+  photoKey              String?   @map("photo_key")
+  exitedAt              DateTime? @map("exited_at") @db.Timestamptz(3)
+  exitById              String?   @map("exit_by_id") @db.Uuid
+  returnedAt            DateTime? @map("returned_at") @db.Timestamptz(3)
+  returnById            String?   @map("return_by_id") @db.Uuid
+  overdueAlertedAt      DateTime? @map("overdue_alerted_at") @db.Timestamptz(3)
+  batchId               String?   @map("batch_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  events  LeaveoutEvent[]
+  student Student         @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, status])
+  @@index([schoolId, studentId])
+  @@index([schoolId, leaveAt])
+  @@map("leaveouts")
+}
+
+/// Exits and returns recorded at the gate (append-only), including ones made offline and synced
+/// later. A conflict (e.g. the pass was cancelled while the device was offline) is flagged.
+model LeaveoutEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  leaveoutId    String   @map("leaveout_id") @db.Uuid
+  /// "exit" or "return"
+  kind          String
+  /// When it happened at the gate (the device's clock).
+  at            DateTime @db.Timestamptz(3)
+  recordedAt    DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  byId          String   @map("by_id") @db.Uuid
+  /// The gate device's own id for the event, so a repeated sync records it once.
+  deviceEventId String   @map("device_event_id")
+  offline       Boolean  @default(false)
+  conflict      String?
+
+  leaveout Leaveout @relation(fields: [leaveoutId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, deviceEventId])
+  @@index([schoolId, leaveoutId])
+  @@map("leaveout_events")
+}
+
+/// The reasons a school offers for a leave-out (configuration, copied from defaults per school).
+model LeaveoutReason {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String  @map("school_id") @db.Uuid
+  name     String
+  position Int
+  active   Boolean @default(true)
+
+  @@unique([schoolId, name])
+  @@map("leaveout_reasons")
+}
+
+/// Half-term passes generated in one go (a class, a level or all boarders).
+model LeaveoutBatch {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  title       String
+  audience    Json
+  created     Int
+  skipped     Int
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([schoolId, createdAt])
+  @@map("leaveout_batches")
+}
+
+/// Each school's gate pass signing key (Ed25519). Gate devices get only the public key, so they
+/// can check a pass offline but never make one. The private key is encrypted at rest.
+model LeaveoutPassKey {
+  schoolId      String   @id @map("school_id") @db.Uuid
+  publicKey     String   @map("public_key")
+  privateKeyEnc String   @map("private_key_enc")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("leaveout_pass_keys")
 }

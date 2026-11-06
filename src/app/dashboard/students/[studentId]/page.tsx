@@ -30,6 +30,8 @@ import {
 } from "../actions";
 import { StudentsShell, isoDay, kes, loadStudentsActor, showDate } from "../shared";
 import { canSeeMessages } from "@/lib/messaging/service";
+import { whenText } from "@/lib/leaveout/rules";
+import { canSeeLeaveouts, studentLeaveouts } from "@/lib/leaveout/service";
 
 export const metadata: Metadata = { title: "Student · Kiota" };
 
@@ -63,6 +65,9 @@ async function Student({ params, searchParams }: Props) {
   if (!s) notFound();
 
   const canEdit = actor.permissions.has("students.edit");
+  const leaveouts = canSeeLeaveouts(actor.permissions)
+    ? await studentLeaveouts(deps, actor, s.id)
+    : null;
   const canFees = actor.permissions.has("fees.view") || actor.permissions.has("fees.collect");
   const feeBalance = canFees
     ? await withContext(deps.db, ctxOf(actor), (tx) => studentPosition(tx, actor.schoolId, s.id))
@@ -231,6 +236,28 @@ async function Student({ params, searchParams }: Props) {
           </Link>
         ) : null}
       </section>
+
+      {leaveouts ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-heading text-lg font-bold">Leave-outs</h2>
+          {leaveouts.length === 0 ? <p className="text-sm text-ink/60">None yet.</p> : null}
+          <ul className="flex flex-col gap-1">
+            {leaveouts.slice(0, 10).map((l) => (
+              <li key={l.id}>
+                <Link
+                  href={`/dashboard/leaveouts/${l.id}`}
+                  className="flex justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm"
+                >
+                  <span>
+                    {l.reason} · {whenText(l.leaveAt)} with {l.collectorName}
+                  </span>
+                  <span className="text-ink/60">{l.status}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {senior && canEdit && level ? (
         <Card>

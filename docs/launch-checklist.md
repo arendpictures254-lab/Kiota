@@ -118,6 +118,28 @@ Details: docs/parent-portal.md.
 - [ ] **Receipt share links** never expire and the portal links to them (see "Before real money
       flows"): decide before launch.
 
+## Leave-outs and the gate
+
+Details: docs/leaveouts.md.
+
+- [ ] **Two-way SMS for collector approvals.** The SMS asks parents to "Reply YES 1234", but an
+      alphanumeric sender ID (e.g. BAHARI) cannot receive replies. Get a two-way short code or
+      long number from Africa's Talking, point its incoming messages callback at
+      `https://app.kiota.app/api/hooks/sms-in/<SMS_CALLBACK_TOKEN>`, and put that number in the
+      template's wording. Until then, parents approve in the portal (it works already).
+- [ ] **The Director grants "approve leave-outs"** to the pilot school's chosen staff (Staff →
+      person), and assigns the gate guard and matron roles.
+- [ ] **Student photos uploaded** before the first leave-out: the pass and the gate rely on them.
+- [ ] **Test the gate on the guards' own phone, outside in daylight**: scanning printed A5 passes
+      and phone screens, the photo fallback, and an exit with the phone in airplane mode synced
+      later. Keep the gate phone charged and signed in.
+- [ ] **A5 printing** of passes on the school's printer (check the QR code scans from paper).
+- [ ] **Agree the rules with the school**: how early before the leave time the gate lets a child
+      out (2 hours today), the reasons list (Half term, Weekend, Medical appointment, Family
+      event, Bereavement, Other), and who is told when a student is late back.
+- [ ] **Half term rehearsal**: issue passes for one class with the half-term tool, and run the
+      gate's half-term mode with a queue of collectors.
+
 ## Public website
 
 - [ ] **Lawyer review of the privacy policy and terms** (kiota.app/privacy and /terms are marked

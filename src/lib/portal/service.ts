@@ -114,6 +114,43 @@ export function childLabel(c: Pick<ChildLink, "className" | "streamName">) {
 // Fees
 // ---------------------------------------------------------------------------
 
+/**
+ * Split what a child owes into what is due now (overdue plus anything due today), the rest of
+ * the year (instalments not due yet) and arrears (unpaid balances from previous terms). Payments
+ * clear the oldest debts first, so what is still owed sits on the newest invoice first; anything
+ * beyond that invoice is arrears. Pure, for tests.
+ */
+export function splitBalance(
+  balanceCents: number,
+  newest: { totalCents: number; installments: { dueDate: Date; percentBp: number }[] } | null,
+  now: Date,
+) {
+  const owed = Math.max(0, balanceCents);
+  const notYetDue = newest
+    ? Math.min(newest.totalCents - dueByDate(newest.totalCents, newest.installments, now), owed)
+    : 0;
+  const dueNowCents = owed - notYetDue;
+  const arrearsCents = Math.min(
+    dueNowCents,
+    newest ? Math.max(0, balanceCents - newest.totalCents) : owed,
+  );
+  const next = newest?.installments
+    .filter((i) => i.dueDate > now)
+    .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime())[0];
+  const nextDue =
+    next && newest && notYetDue > 0
+      ? {
+          date: next.dueDate,
+          amountCents: Math.min(
+            notYetDue,
+            dueByDate(newest.totalCents, newest.installments, next.dueDate) -
+              dueByDate(newest.totalCents, newest.installments, now),
+          ),
+        }
+      : null;
+  return { dueNowCents, restOfYearCents: notYetDue, arrearsCents, nextDue };
+}
+
 type FeesJson = {
   balanceCents: number;
   voteHeads: { name: string | null; balanceCents: number }[];
@@ -161,7 +198,6 @@ export async function childFees({ db }: Deps, userId: string, linkId: string, no
       term: i.term,
       year: i.year,
       totalCents: i.totalCents,
-      notYetDueCents: i.totalCents - dueByDate(i.totalCents, plan, now),
       installments: plan.map((p) => ({
         ...p,
         overdue: !!missed && p.dueDate <= now && p.dueDate.getTime() >= missed.getTime(),
@@ -169,17 +205,15 @@ export async function childFees({ db }: Deps, userId: string, linkId: string, no
       overdueSince: missed,
     };
   });
-  // Overdue: everything owed except the part of the newest invoice whose dates have not come.
-  // Arrears from earlier terms (opening balances, old invoices) are overdue already.
-  const notYetDue = invoices[0]?.notYetDueCents ?? 0;
-  const overdueCents = Math.max(0, balance - notYetDue);
+  const split = splitBalance(balance, invoices[0] ?? null, now);
   return {
     balanceCents: balance,
     voteHeads: f.voteHeads.map((v) => ({ name: v.name, balanceCents: Number(v.balanceCents) })),
     invoices,
-    overdueCents,
-    /** The first instalment date missed, or null when the overdue part is older arrears. */
-    overdueSince: overdueCents > 0 ? (invoices[0]?.overdueSince ?? null) : null,
+    ...split,
+    /** The first instalment date missed, if part of "due now" is a missed instalment. */
+    missedSince:
+      split.dueNowCents > split.arrearsCents ? (invoices[0]?.overdueSince ?? null) : null,
     payments: f.payments.map((p) => ({ ...p, paidAt: new Date(p.paidAt) })),
     mpesa: f.mpesa,
   };
@@ -224,7 +258,7 @@ export async function markNoticeRead({ db }: Deps, userId: string, campaignId: s
 
 export type Attention =
   | { kind: "pending"; linkId: string; child: string; school: string }
-  | { kind: "overdue"; linkId: string; child: string; amountCents: number; since: Date | null }
+  | { kind: "due"; linkId: string; child: string; amountCents: number; arrearsCents: number }
   | { kind: "unread"; linkId: string; child: string; count: number };
 
 export async function familyOverview(deps: Deps, userId: string, now = new Date()) {
@@ -250,14 +284,14 @@ export async function familyOverview(deps: Deps, userId: string, now = new Date(
         school: c.schoolName,
       })),
     ...perChild.flatMap(({ child, fees }) =>
-      fees && fees.overdueCents > 0
+      fees && fees.dueNowCents > 0
         ? [
             {
-              kind: "overdue" as const,
+              kind: "due" as const,
               linkId: child.linkId,
               child: child.firstName,
-              amountCents: fees.overdueCents,
-              since: fees.overdueSince,
+              amountCents: fees.dueNowCents,
+              arrearsCents: fees.arrearsCents,
             },
           ]
         : [],
