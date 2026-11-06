@@ -34,7 +34,7 @@ export function CreateSchoolForm({ levels }: { levels: { key: string; label: str
           <Checkbox key={l.key} name="levels" value={l.key} label={l.label} />
         ))}
       </fieldset>
-      <h2 className="font-heading text-lg font-bold">Director</h2>
+      <h2 className="font-heading text-section font-bold">Director</h2>
       <Field
         label="Director's full name"
         name="directorName"

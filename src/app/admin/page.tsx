@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { ButtonLink, Loading, Notice, Shell } from "@/components/ui";
+import { ButtonLink, Loading, Notice } from "@/components/ui";
 import { requireUser } from "@/lib/auth/context";
 import { db } from "@/lib/db";
 import { MODULES } from "@/lib/staff/service";
@@ -12,11 +12,11 @@ export const metadata: Metadata = { title: "Arend Studio admin · Kiota" };
 
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
   return (
-    <Shell title="Schools" aside={<SignOutButton />}>
+    <AppShell title="Schools" width="wide" nav="admin">
       <Suspense fallback={<Loading />}>
         <Schools searchParams={searchParams} />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -51,7 +51,7 @@ async function Schools({ searchParams }: Pick<PageProps<"/admin">, "searchParams
       <ButtonLink href="/admin/messaging" variant="secondary">
         Messaging wallets and templates
       </ButtonLink>
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {schools.map((s) => (
           <li key={s.id} className="rounded-2xl border border-ink/10 bg-white p-4">
             <p className="font-semibold text-ink">{s.name}</p>

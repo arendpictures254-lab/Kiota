@@ -40,14 +40,24 @@ test("Wanjiku confirms her Milima child, switches children, pays by M-Pesa and o
   await page.getByRole("button", { name: "Confirm and add Joy" }).click();
   await expect(page.getByText("Joy has been added to your account.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Joy Kamau" })).toBeVisible();
-  await expect(page.getByText(/Milima School/).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/Milima School/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
 
   // The switcher now has both children (and "All children").
   await expect(nav.getByRole("link", { name: /Joy/ })).toBeVisible();
   await expect(nav.getByRole("link", { name: /All children/ })).toBeVisible();
   await nav.getByRole("link", { name: /Brian/ }).click();
   await expect(page.getByRole("heading", { name: "Brian Kamau" })).toBeVisible();
-  await expect(page.getByText(/Bahari Academy/).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/Bahari Academy/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
 
   // Pay: the amount is the balance due, the phone is her own; both can be changed.
   await page.getByRole("link", { name: "Pay with M-Pesa" }).first().click();
@@ -80,7 +90,10 @@ test("a teacher who is also a parent chooses, and switches between staff and par
   await page.getByRole("button", { name: /^Parent/ }).click();
   await expect(page).toHaveURL(/\/parent$/);
   await expect(
-    page.getByRole("heading", { name: /Kibet/ }).or(page.getByText(/Kibet/).first()),
+    page
+      .getByRole("heading", { name: /Kibet/ })
+      .or(page.getByText(/Kibet/).filter({ visible: true }).first())
+      .first(),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Staff view" }).click();

@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Request a leave-out · Kiota" };
 
 export default function NewLeaveoutPage({ searchParams }: PageProps<"/dashboard/leaveouts/new">) {
   return (
-    <LeaveoutsShell title="Request a leave-out">
+    <LeaveoutsShell width="form" title="Request a leave-out">
       <Suspense fallback={<Loading />}>
         <NewLeaveout searchParams={searchParams} />
       </Suspense>

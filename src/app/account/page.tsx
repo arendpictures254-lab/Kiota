@@ -56,7 +56,7 @@ async function Account() {
       </Card>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">{t("account.language")}</h2>
+        <h2 className="font-heading text-section font-bold">{t("account.language")}</h2>
         <LanguageForm
           current={locale}
           text={{
@@ -70,7 +70,7 @@ async function Account() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">{t("account.sessions")}</h2>
+        <h2 className="font-heading text-section font-bold">{t("account.sessions")}</h2>
         <ul className="flex flex-col gap-2">
           {sessions.map((s) => (
             <li

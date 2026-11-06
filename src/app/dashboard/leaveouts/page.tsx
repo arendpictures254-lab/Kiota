@@ -59,13 +59,13 @@ async function Hub() {
       ) : null}
 
       <section className="flex flex-col gap-2" aria-labelledby="waiting">
-        <h2 id="waiting" className="font-heading text-lg font-bold">
+        <h2 id="waiting" className="font-heading text-section font-bold">
           Waiting ({lists.waiting.length})
         </h2>
         {lists.waiting.length === 0 ? (
           <p className="text-ink/60">Nothing waiting.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
             {lists.waiting.map((l) => (
               <Item key={l.id} l={l} />
             ))}
@@ -79,13 +79,16 @@ async function Hub() {
       </section>
 
       <section className="flex flex-col gap-2" aria-labelledby="out">
-        <h2 id="out" className="font-heading text-lg font-bold">
+        <h2 id="out" className="font-heading text-section font-bold">
           Out now ({lists.out.length})
         </h2>
         {lists.out.length === 0 ? (
           <p className="text-ink/60">Every student is in school.</p>
         ) : (
-          <ul className="flex flex-col gap-2" data-testid="out-board">
+          <ul
+            className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full"
+            data-testid="out-board"
+          >
             {lists.out.map((l) => (
               <Item
                 key={l.id}
@@ -106,13 +109,13 @@ async function Hub() {
       </section>
 
       <section className="flex flex-col gap-2" aria-labelledby="soon">
-        <h2 id="soon" className="font-heading text-lg font-bold">
+        <h2 id="soon" className="font-heading text-section font-bold">
           Passes for today and tomorrow ({lists.upcoming.length})
         </h2>
         {lists.upcoming.length === 0 ? (
           <p className="text-ink/60">No approved passes.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
             {lists.upcoming.map((l) => (
               <Item key={l.id} l={l} />
             ))}

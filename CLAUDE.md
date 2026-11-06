@@ -79,6 +79,7 @@ src/app/api/hooks/            SMS and WhatsApp delivery report webhooks
 assets/fonts/                 Brand fonts used in PDFs (OFL licensed)
 src/app/globals.css           Tailwind import and Kiota design tokens
 src/components/               Shared UI (ui.tsx: Button, Field, Card, Shell...)
+                              app-shell.tsx (sidebar + tab bar), data-table.tsx, icons.tsx
 src/lib/db.ts                 App database access (kiota_app role): db(ctx), inContext(ctx, fn)
 src/lib/db-core.ts            Client factory and the school-context Prisma extension
 src/lib/auth/                 Permission catalogue, permission checks, OTP, sessions, context
@@ -94,6 +95,9 @@ src/lib/audit.ts              audit(tx, entry): append to the audit log in the s
 src/generated/prisma/         Generated Prisma client (gitignored, `npm run db:generate`)
 tests/                        Database test setup and helpers
 e2e/                          Playwright end-to-end tests
+                              (screens.ts: main screens and widths for responsive.spec.ts)
+scripts/screenshots.ts        Screenshots of every main screen (`npm run screenshots`)
+docs/screenshots/             Before/after screenshots of the responsive work
 scripts/dev-db.ts             Local PostgreSQL without Docker (`npm run db:local`)
 scripts/make-import-samples.ts  Writes docs/samples/*.xlsx (`npm run samples`)
 scripts/bench-import.ts       1,000-student import benchmark (`npm run bench:import`)
@@ -204,6 +208,39 @@ Fonts: Syne for headings (`font-heading`, applied to h1–h4 by default), DM San
 
 Next.js 16 has `cacheComponents` on: anything that reads cookies or the database goes in an async
 component inside `<Suspense>` (see the existing pages).
+
+## Responsive design
+
+Every screen fills a computer display on a computer and fits a phone on a phone. Check each
+screen at these widths (`npm run screenshots`, `e2e/responsive.spec.ts`):
+
+| Name   | Width        | What it gets                                                      |
+| ------ | ------------ | ----------------------------------------------------------------- |
+| Phone  | under 640 px | One column. Also check 320 px (small Android)                     |
+| Tablet | 640–1023 px  | Two columns where it helps; still the phone navigation            |
+| Laptop | 1024–1439 px | Left sidebar; multi-column layouts; full tables                   |
+| Large  | 1440 px +    | Content capped at its width (no endless stretching), more columns |
+
+- **App shell** (`src/components/app-shell.tsx`, parents: `src/app/parent/parent-shell.tsx`):
+  phones get a top bar and a bottom tab bar with 4–5 main sections (more go under "More");
+  from 1024 px a left sidebar with the role's sections, the school's name and crest and the user
+  menu at the top. Sections come from permissions (`schoolNavItems`), never role names.
+- **Content widths** (`AppShell`/`Shell`/`ParentShell` `width` prop): dashboards and lists
+  `wide` (up to 1440 px) with 1/2/3/4-column card grids (`CardGrid`, or
+  `grid md:grid-cols-2 2xl:grid-cols-3`); forms `form` (~720 px) with short fields side by
+  side; reading pages (notices, receipts, one leave-out) `reading` (~760 px).
+- **Tables:** `DataTable` (`src/components/data-table.tsx`): from 1024 px a full table with a
+  sticky header, sortable columns and set widths; below that, stacked rows showing 2–3 fields,
+  each opening the details. Never a table that scrolls sideways on a phone.
+- **Touch:** targets at least 44 px (`globals.css` enforces it for coarse pointers); hover
+  effects only as extras (Tailwind's `hover:` only applies where hover exists).
+- **Type:** fluid with `clamp()`: `text-display` (big numbers), `text-title` (page h1),
+  `text-section` (h2). Don't hard-code `text-3xl` headings.
+- **Buttons** fit their label from 640 px; pass `wide` to keep one full width (narrow forms).
+- **No sideways scrolling from 320 px up.** Long words (links, tokens) need
+  `[overflow-wrap:anywhere]`; flex/grid children holding text need `min-w-0`.
+- **Exceptions:** the gate scanner stays a full-screen phone layout (centred and enlarged on big
+  screens). Printed receipts, passes and statements keep their print layouts.
 
 ## Naming conventions
 

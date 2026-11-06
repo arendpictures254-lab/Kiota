@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Loading, Shell } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { requireSchool } from "@/lib/auth/context";
 
 export const metadata: Metadata = { title: "School setup · Kiota" };
@@ -40,15 +40,11 @@ const PAGES = [
 
 export default function SetupPage() {
   return (
-    <Shell
-      title="School setup"
-      back={{ href: "/dashboard", label: "Dashboard" }}
-      aside={<SignOutButton />}
-    >
+    <AppShell title="School setup" back={{ href: "/dashboard", label: "Dashboard" }} width="wide">
       <Suspense fallback={<Loading />}>
         <Menu />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -56,7 +52,7 @@ async function Menu() {
   const ctx = await requireSchool();
   if (!ctx.permissions.has("structure.manage")) redirect("/dashboard");
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
       {PAGES.map((p) => (
         <li key={p.href}>
           <Link

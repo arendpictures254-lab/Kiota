@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Add a student · Kiota" };
 
 export default function NewStudentPage() {
   return (
-    <StudentsShell title="Add a student">
+    <StudentsShell width="form" title="Add a student">
       <Suspense fallback={<Loading />}>
         <NewStudent />
       </Suspense>

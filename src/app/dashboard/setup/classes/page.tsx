@@ -41,7 +41,7 @@ async function Classes() {
     <div className="flex flex-col gap-6">
       <Card>
         <ActionForm action={addStreamAction} submitLabel="Add stream">
-          <h2 className="font-heading text-lg font-bold">Add a stream</h2>
+          <h2 className="font-heading text-section font-bold">Add a stream</h2>
           <Select
             label="Class"
             name="classId"

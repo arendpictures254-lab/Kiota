@@ -30,7 +30,7 @@ async function Subjects() {
     <div className="flex flex-col gap-6">
       <Card>
         <ActionForm action={addSubjectAction} submitLabel="Add subject">
-          <h2 className="font-heading text-lg font-bold">Add a subject or learning area</h2>
+          <h2 className="font-heading text-section font-bold">Add a subject or learning area</h2>
           <Select
             label="Level"
             name="levelId"

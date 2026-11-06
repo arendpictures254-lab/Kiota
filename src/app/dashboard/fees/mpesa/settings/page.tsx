@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "M-Pesa settings · Kiota" };
 
 export default function MpesaSettingsPage() {
   return (
-    <FeesShell title="M-Pesa settings">
+    <FeesShell width="form" title="M-Pesa settings">
       <Suspense fallback={<Loading />}>
         <Settings />
       </Suspense>
@@ -99,7 +99,7 @@ async function Settings() {
 
       {s ? (
         <Card className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold">Callback addresses</h2>
+          <h2 className="font-heading text-section font-bold">Callback addresses</h2>
           <p className="text-sm text-ink/70">
             Safaricom sends payments here. They contain a secret: do not share them.
           </p>

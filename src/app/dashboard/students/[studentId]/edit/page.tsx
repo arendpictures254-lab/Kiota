@@ -35,6 +35,7 @@ async function Edit({ params }: Pick<Props, "params">) {
 
   return (
     <StudentsShell
+      width="form"
       title="Edit student"
       back={{ href: `/dashboard/students/${s.id}`, label: "Back to student" }}
     >

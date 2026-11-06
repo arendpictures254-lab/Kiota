@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Send a notice · Kiota" };
 
 export default function NewNoticePage() {
   return (
-    <MessagesShell title="Send a notice">
+    <MessagesShell width="form" title="Send a notice">
       <Suspense fallback={<Loading />}>
         <Composer />
       </Suspense>

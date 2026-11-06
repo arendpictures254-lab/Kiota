@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Invite parents · Kiota" };
 
 export default function InvitePage({ searchParams }: PageProps<"/dashboard/messages/invite">) {
   return (
-    <MessagesShell title="Invite parents to Kiota">
+    <MessagesShell width="form" title="Invite parents to Kiota">
       <Suspense fallback={<Loading />}>
         <Invite searchParams={searchParams} />
       </Suspense>
@@ -79,7 +79,7 @@ async function Invite({
       </SendConfirmForm>
 
       <section className="flex flex-col gap-3" aria-labelledby="signed-in">
-        <h2 id="signed-in" className="font-heading text-lg font-bold">
+        <h2 id="signed-in" className="font-heading text-section font-bold">
           Who has signed in
         </h2>
         <form className="flex gap-2" action="/dashboard/messages/invite">

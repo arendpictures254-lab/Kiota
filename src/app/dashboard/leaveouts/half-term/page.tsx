@@ -15,7 +15,7 @@ const control =
 
 export default function HalfTermPage() {
   return (
-    <LeaveoutsShell title="Half term passes">
+    <LeaveoutsShell width="form" title="Half term passes">
       <Suspense fallback={<Loading />}>
         <HalfTerm />
       </Suspense>

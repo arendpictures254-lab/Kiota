@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { DataTable } from "@/components/data-table";
 import { SendConfirmForm } from "@/components/send-confirm-form";
 import { Button, Card, Loading, Notice, Select } from "@/components/ui";
 import { deps } from "@/lib/actions";
@@ -70,14 +71,14 @@ async function Reports({ searchParams }: Pick<Props, "searchParams">) {
 
   return (
     <div className="flex flex-col gap-5">
-      <nav className="flex gap-2" aria-label="Reports">
+      <nav className="flex gap-2 sm:max-w-xl" aria-label="Reports">
         {tab("collected", "Collected")}
         {tab("defaulters", "Defaulters")}
         {tab("daily", "Daily")}
       </nav>
       <a
         href="/dashboard/fees/export"
-        className="inline-flex h-12 items-center justify-center rounded-xl border border-teal/30 bg-white font-semibold text-teal hover:bg-egg-blue/30"
+        className="inline-flex min-h-12 items-center justify-center rounded-xl border border-teal/30 bg-white px-4 text-center font-semibold text-teal hover:bg-egg-blue/30 sm:self-start"
       >
         Export everything to Excel (for the auditor)
       </a>
@@ -118,54 +119,64 @@ async function Collected({
   const r = await collectedVsExpected(deps, actor, termId);
   return (
     <div className="flex flex-col gap-4">
-      <form method="get" className="flex items-end gap-2">
+      <form method="get" className="flex max-w-xl items-end gap-2">
         <input type="hidden" name="view" value="collected" />
         <div className="flex-1">
           <Select label="Term" name="termId" defaultValue={termId} options={terms} />
         </div>
-        <Button type="submit" variant="secondary" className="w-24">
+        <Button type="submit" variant="secondary" className="max-w-32">
           Show
         </Button>
       </form>
-      <Card className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Collected vs expected · {r.term.name}</h2>
-        <p className="font-heading text-3xl font-bold text-teal">{kes(r.totals.collectedCents)}</p>
+      <Card className="flex max-w-3xl flex-col gap-2">
+        <h2 className="font-heading text-section font-bold">
+          Collected vs expected · {r.term.name}
+        </h2>
+        <p className="font-heading text-display font-bold text-teal">
+          {kes(r.totals.collectedCents)}
+        </p>
         <p className="text-sm text-ink/70">
           of {kes(r.totals.expectedCents)} expected · {kes(r.totals.outstandingCents)} outstanding
         </p>
         <Bar collected={r.totals.collectedCents} expected={r.totals.expectedCents} />
       </Card>
-      {[
-        ["By vote head", r.voteHeads],
-        ["By class", r.classes],
-      ].map(([title, rows]) => (
-        <section key={title as string} className="flex flex-col gap-2">
-          <h3 className="font-heading font-bold">{title as string}</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink/60">
-                <th className="py-1 font-semibold">
-                  {title === "By class" ? "Class" : "Vote head"}
-                </th>
-                <th className="py-1 text-right font-semibold">Expected</th>
-                <th className="py-1 text-right font-semibold">Collected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(rows as typeof r.voteHeads).map((row) => (
-                <tr key={row.id} className="border-t border-ink/10 align-top">
-                  <td className="py-2">
-                    {row.name}
-                    <Bar collected={row.collectedCents} expected={row.expectedCents} />
-                  </td>
-                  <td className="py-2 text-right">{kes(row.expectedCents)}</td>
-                  <td className="py-2 text-right font-semibold">{kes(row.collectedCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      ))}
+      <div className="grid gap-5 xl:grid-cols-2">
+        {(
+          [
+            ["By vote head", "Vote head", r.voteHeads],
+            ["By class", "Class", r.classes],
+          ] as const
+        ).map(([title, label, rows]) => (
+          <section key={title} className="flex min-w-0 flex-col gap-2">
+            <h3 className="font-heading font-bold">{title}</h3>
+            <DataTable
+              caption={title}
+              columns={[
+                { key: "name", label },
+                { key: "expected", label: "Expected", align: "right", width: "9rem" },
+                { key: "collected", label: "Collected", align: "right", width: "9rem" },
+              ]}
+              mobile={{ title: "name", subtitle: ["expected"], value: "collected" }}
+              rows={rows.map((row) => ({
+                id: row.id,
+                cells: {
+                  name: {
+                    sort: row.name,
+                    node: (
+                      <span className="flex flex-col gap-1">
+                        <span>{row.name}</span>
+                        <Bar collected={row.collectedCents} expected={row.expectedCents} />
+                      </span>
+                    ),
+                  },
+                  expected: { node: kes(row.expectedCents), sort: row.expectedCents },
+                  collected: { node: kes(row.collectedCents), sort: row.collectedCents },
+                },
+              }))}
+            />
+          </section>
+        ))}
+      </div>
       <p className="text-xs text-ink/60">
         Payments clear older balances first; what is left counts toward this term.
       </p>
@@ -190,7 +201,7 @@ async function Defaulters({
     <div className="flex flex-col gap-4">
       <form
         method="get"
-        className="flex flex-col gap-3 rounded-2xl border border-ink/10 bg-white p-4"
+        className="grid gap-3 rounded-2xl border border-ink/10 bg-white p-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_2fr_auto] xl:items-end"
       >
         <input type="hidden" name="view" value="defaulters" />
         <Select
@@ -232,7 +243,7 @@ async function Defaulters({
             />
           </div>
         </div>
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" wide>
           Filter
         </Button>
       </form>
@@ -244,7 +255,7 @@ async function Defaulters({
           action={sendRemindersAction}
           checkLabel="Remind selected parents: check cost"
         >
-          <ul className="flex flex-col gap-2">
+          <ul className="grid gap-2 xl:grid-cols-2">
             {rows.map((r) => (
               <li key={r.studentId}>
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink/10 bg-white p-3">
@@ -286,7 +297,7 @@ async function Daily({ actor, date }: { actor: A; date: string }) {
   const r = await dailyCollection(deps, actor, date);
   return (
     <div className="flex flex-col gap-4">
-      <form method="get" className="flex items-end gap-2">
+      <form method="get" className="flex max-w-xl items-end gap-2">
         <input type="hidden" name="view" value="daily" />
         <div className="flex flex-1 flex-col gap-1.5">
           <label htmlFor="date" className="text-sm font-semibold">
@@ -300,13 +311,13 @@ async function Daily({ actor, date }: { actor: A; date: string }) {
             className="h-12 rounded-xl border border-ink/20 px-4"
           />
         </div>
-        <Button type="submit" variant="secondary" className="w-24">
+        <Button type="submit" variant="secondary" className="max-w-32">
           Show
         </Button>
       </form>
-      <Card className="flex flex-col gap-1">
-        <h2 className="font-heading text-lg font-bold">Daily collection · {r.date}</h2>
-        <p className="font-heading text-3xl font-bold text-teal">{kes(r.netCents)}</p>
+      <Card className="flex max-w-3xl flex-col gap-1">
+        <h2 className="font-heading text-section font-bold">Daily collection · {r.date}</h2>
+        <p className="font-heading text-display font-bold text-teal">{kes(r.netCents)}</p>
         <p className="text-sm text-ink/70">
           Received {kes(r.receivedCents)}
           {r.reversedCents ? `, reversed ${kes(r.reversedCents)}` : ""}
@@ -320,7 +331,7 @@ async function Daily({ actor, date }: { actor: A; date: string }) {
           ))}
         </ul>
       </Card>
-      <ul className="flex flex-col gap-2">
+      <ul className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
         {r.payments.map((p) => (
           <li key={p.id}>
             <Link

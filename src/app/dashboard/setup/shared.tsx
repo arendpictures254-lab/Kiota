@@ -1,9 +1,8 @@
+import { AppShell, type PageWidth } from "@/components/app-shell";
 import "server-only";
 
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Shell } from "@/components/ui";
 import { actorFor, deps } from "@/lib/actions";
 import { requireSchool } from "@/lib/auth/context";
 import { getStructure } from "@/lib/structure/service";
@@ -16,22 +15,30 @@ export async function loadSetup() {
   return { ctx, actor, structure: await getStructure(deps, actor) };
 }
 
-export function SetupShell({ title, children }: { title: string; children: ReactNode }) {
+export function SetupShell({
+  title,
+  width = "form",
+  children,
+}: {
+  title: string;
+  width?: PageWidth;
+  children: ReactNode;
+}) {
   return (
-    <Shell
+    <AppShell
       title={title}
       back={{ href: "/dashboard/setup", label: "School setup" }}
-      aside={<SignOutButton />}
+      width={width}
     >
       {children}
-    </Shell>
+    </AppShell>
   );
 }
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-heading text-lg font-bold text-ink">{title}</h2>
+      <h2 className="font-heading text-section font-bold text-ink">{title}</h2>
       {children}
     </section>
   );

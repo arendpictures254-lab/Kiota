@@ -1,6 +1,5 @@
+import { AppShell, type PageWidth } from "@/components/app-shell";
 import type { ReactNode } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Shell } from "@/components/ui";
 import { actorFor } from "@/lib/actions";
 import { requireSchool } from "@/lib/auth/context";
 import { canSeeLeaveouts } from "@/lib/leaveout/service";
@@ -9,16 +8,20 @@ import { redirect } from "next/navigation";
 export function LeaveoutsShell({
   title,
   back = { href: "/dashboard/leaveouts", label: "Leave-outs" },
+  width = "wide",
+  actions,
   children,
 }: {
   title?: string;
   back?: { href: string; label: string };
+  width?: PageWidth;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <Shell title={title} back={back} aside={<SignOutButton />}>
+    <AppShell title={title} back={back} width={width} actions={actions}>
       {children}
-    </Shell>
+    </AppShell>
   );
 }
 

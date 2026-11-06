@@ -81,11 +81,11 @@ async function Log({ searchParams }: Pick<Props, "searchParams">) {
           <p className="text-ink/70">No messages yet.</p>
         </Card>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="grid items-start gap-2 xl:grid-cols-2">
           {rows.map((m) => (
             <li
               key={m.id}
-              className="flex flex-col gap-1.5 rounded-2xl border border-ink/10 bg-white p-4"
+              className="flex min-w-0 flex-col gap-1.5 rounded-2xl border border-ink/10 bg-white p-4"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-ink">
@@ -102,7 +102,7 @@ async function Log({ searchParams }: Pick<Props, "searchParams">) {
                   {STATUS_LABEL[m.status]}
                 </span>
               </div>
-              <p className="text-sm text-ink/80">{m.body}</p>
+              <p className="text-sm [overflow-wrap:anywhere] text-ink/80">{m.body}</p>
               <p className="text-xs text-ink/60">
                 {nairobi(m.createdAt)}
                 {m.student ? (

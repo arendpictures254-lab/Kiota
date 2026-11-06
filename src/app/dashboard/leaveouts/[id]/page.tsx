@@ -17,7 +17,7 @@ export default function LeaveoutPage({
   searchParams,
 }: PageProps<"/dashboard/leaveouts/[id]">) {
   return (
-    <LeaveoutsShell>
+    <LeaveoutsShell width="reading">
       <Suspense fallback={<Loading />}>
         <Leaveout params={params} searchParams={searchParams} />
       </Suspense>
@@ -76,7 +76,7 @@ async function Leaveout({ params, searchParams }: PageProps<"/dashboard/leaveout
       ) : null}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-bold">{l.studentName}</h1>
+          <h1 className="font-heading text-title font-bold">{l.studentName}</h1>
           <p className="text-sm text-ink/60">
             {l.admissionNumber} · {l.classLabel}
           </p>
@@ -158,7 +158,7 @@ async function Leaveout({ params, searchParams }: PageProps<"/dashboard/leaveout
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Who did what</h2>
+        <h2 className="font-heading text-section font-bold">Who did what</h2>
         <ol className="flex flex-col gap-1 text-sm">
           {steps
             .filter(([, , at]) => at)

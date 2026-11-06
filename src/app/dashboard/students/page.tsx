@@ -53,19 +53,21 @@ async function Students({ searchParams }: Pick<PageProps<"/dashboard/students">,
 
   return (
     <div className="flex flex-col gap-4">
-      {actor.permissions.has("students.edit") ? (
-        <ButtonLink href="/dashboard/students/new">Add a student</ButtonLink>
-      ) : null}
-      {actor.permissions.has("import.run") ? (
-        <ButtonLink href="/dashboard/students/import" variant="secondary">
-          Import from Excel
-        </ButtonLink>
-      ) : null}
+      <div className="flex flex-col gap-3 empty:hidden sm:flex-row sm:flex-wrap">
+        {actor.permissions.has("students.edit") ? (
+          <ButtonLink href="/dashboard/students/new">Add a student</ButtonLink>
+        ) : null}
+        {actor.permissions.has("import.run") ? (
+          <ButtonLink href="/dashboard/students/import" variant="secondary">
+            Import from Excel
+          </ButtonLink>
+        ) : null}
+      </div>
 
       <form
         method="get"
         role="search"
-        className="flex flex-col gap-3 rounded-2xl border border-ink/10 bg-white p-4"
+        className="flex flex-col gap-3 rounded-2xl border border-ink/10 bg-white p-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
       >
         <div className="flex flex-col gap-1.5">
           <label htmlFor="q" className="text-sm font-semibold text-ink">
@@ -81,10 +83,11 @@ async function Students({ searchParams }: Pick<PageProps<"/dashboard/students">,
           />
         </div>
         <details
+          className="lg:order-last lg:col-span-2"
           open={!!(filters.classId || filters.streamId || filters.boarding || filters.status)}
         >
           <summary className="cursor-pointer text-sm font-semibold text-teal">Filters</summary>
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Select
               label="Class"
               name="classId"
@@ -127,7 +130,7 @@ async function Students({ searchParams }: Pick<PageProps<"/dashboard/students">,
         {ownStreamsOnly ? " in your streams" : ""}
       </p>
 
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {students.map((s) => (
           <li key={s.id}>
             <Link

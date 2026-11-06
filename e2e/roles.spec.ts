@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { signIn } from "./helpers";
+import { fromUserMenu, signIn } from "./helpers";
 
 // Each test signs in a different seeded phone. Run once (mobile first) so parallel
 // projects never replace each other's sign-in codes.
@@ -13,13 +13,13 @@ test("someone at two schools picks which one to open", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Choose a school" })).toBeVisible();
   await page.getByRole("button", { name: /Milima School/ }).click();
   await expect(page.getByRole("heading", { name: "Hello, Faith Njeri" })).toBeVisible();
-  await expect(page.getByText("Milima School").filter({ visible: true })).toBeVisible();
-  await expect(page.getByText("Subject teacher").filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Milima School")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Subject teacher")).toBeVisible();
 
-  await page.getByRole("link", { name: "Switch school" }).click();
+  await fromUserMenu(page, page.getByRole("link", { name: "Switch school" }));
   await page.getByRole("button", { name: /Bahari Academy/ }).click();
   await expect(page.getByRole("heading", { name: "Hello, Faith Njeri" })).toBeVisible();
-  await expect(page.getByText("Bahari Academy").filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Bahari Academy")).toBeVisible();
 });
 
 test("a Bursar has no staff tools, and the staff pages refuse them on the server", async ({
@@ -32,7 +32,7 @@ test("a Bursar has no staff tools, and the staff pages refuse them on the server
   await page.goto("/dashboard/staff/invite");
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await fromUserMenu(page, page.getByRole("button", { name: "Sign out" }));
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/sign-in$/);

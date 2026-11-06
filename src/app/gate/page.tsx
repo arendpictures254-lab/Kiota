@@ -13,7 +13,8 @@ export const viewport: Viewport = { themeColor: "#1F5F63" };
 
 export default function GatePage() {
   return (
-    <Shell aside={<SignOutButton />}>
+    // The gate stays a phone layout: one centred column, enlarged on bigger screens.
+    <Shell aside={<SignOutButton />} width="narrow">
       <Suspense fallback={<Loading />}>
         <Gate />
       </Suspense>
@@ -24,5 +25,9 @@ export default function GatePage() {
 async function Gate() {
   const ctx = await requireSchool();
   if (!canUseGate(await actorFor(ctx))) redirect("/dashboard");
-  return <GateApp schoolName={ctx.school.name} />;
+  return (
+    <div className="md:[zoom:1.15] xl:[zoom:1.3]">
+      <GateApp schoolName={ctx.school.name} />
+    </div>
+  );
 }

@@ -1,9 +1,8 @@
+import { AppShell, type PageWidth } from "@/components/app-shell";
 import "server-only";
 
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Shell } from "@/components/ui";
 import { actorFor } from "@/lib/actions";
 import { requireSchool } from "@/lib/auth/context";
 import { canSeeMessages } from "@/lib/messaging/service";
@@ -19,16 +18,20 @@ export async function loadMessagesActor() {
 export function MessagesShell({
   title,
   back = { href: "/dashboard/messages", label: "Messages" },
+  width = "wide",
+  actions,
   children,
 }: {
   title?: string;
   back?: { href: string; label: string };
+  width?: PageWidth;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <Shell title={title} back={back} aside={<SignOutButton />}>
+    <AppShell title={title} back={back} width={width} actions={actions}>
       {children}
-    </Shell>
+    </AppShell>
   );
 }
 

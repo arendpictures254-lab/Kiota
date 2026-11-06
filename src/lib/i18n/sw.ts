@@ -32,6 +32,10 @@ export const sw: Record<MessageKey, string> = {
   "signin.runningSchool": "Unaendesha shule?",
   "signin.demo": "Omba onyesho",
 
+  "signin.tagline": "Kila mtoto, mahali pamoja.",
+  "signin.point1": "Karo, risiti na malipo ya M-Pesa",
+  "signin.point2": "Matangazo na ujumbe kutoka shuleni",
+  "signin.point3": "Ruhusa za kutoka na bweni, kwa usalama",
   "choose.title": "Ungependa kutumia Kiota kama nani?",
   "choose.staff": "Mfanyakazi",
   "choose.staffHint": "Kazi yako shuleni",
@@ -94,6 +98,9 @@ export const sw: Record<MessageKey, string> = {
   "child.inCredit": "Ziada ya {amount}",
   "child.newNotices": "{n} mapya",
   "child.notFound": "Mtoto huyu hajaunganishwa na akaunti yako.",
+  "child.latestNotices": "Matangazo ya karibuni",
+  "child.latestReceipts": "Risiti za karibuni",
+  "child.seeAll": "Ona yote",
   "child.switch": "Chagua mtoto",
 
   "fees.title": "Karo",

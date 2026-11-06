@@ -258,7 +258,15 @@ export async function markNoticeRead({ db }: Deps, userId: string, campaignId: s
 
 export type Attention =
   | { kind: "pending"; linkId: string; child: string; school: string }
-  | { kind: "due"; linkId: string; child: string; amountCents: number; arrearsCents: number }
+  | {
+      kind: "due";
+      linkId: string;
+      child: string;
+      amountCents: number;
+      arrearsCents: number;
+      /** Overdue (arrears or a missed date), not only due today: shown in red. */
+      late: boolean;
+    }
   | { kind: "unread"; linkId: string; child: string; count: number };
 
 export async function familyOverview(deps: Deps, userId: string, now = new Date()) {
@@ -292,6 +300,7 @@ export async function familyOverview(deps: Deps, userId: string, now = new Date(
               child: child.firstName,
               amountCents: fees.dueNowCents,
               arrearsCents: fees.arrearsCents,
+              late: fees.arrearsCents > 0 || !!fees.missedSince,
             },
           ]
         : [],

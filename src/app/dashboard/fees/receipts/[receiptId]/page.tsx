@@ -19,7 +19,7 @@ type Props = PageProps<"/dashboard/fees/receipts/[receiptId]">;
 
 export default function ReceiptPage({ params, searchParams }: Props) {
   return (
-    <FeesShell back={{ href: "/dashboard/fees/payments", label: "Payments" }}>
+    <FeesShell width="reading" back={{ href: "/dashboard/fees/payments", label: "Payments" }}>
       <Suspense fallback={<Loading />}>
         <Receipt params={params} searchParams={searchParams} />
       </Suspense>
@@ -90,7 +90,7 @@ async function Receipt({ params, searchParams }: Props) {
             variant="danger"
             pendingLabel="Reversing…"
           >
-            <h2 className="font-heading text-lg font-bold">Reverse this payment</h2>
+            <h2 className="font-heading text-section font-bold">Reverse this payment</h2>
             <p className="text-sm text-ink/70">
               The receipt stays on record, marked reversed. The balance goes back up and the
               Director is told.

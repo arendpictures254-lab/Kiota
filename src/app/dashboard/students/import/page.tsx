@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Import students · Kiota" };
 
 export default function ImportPage() {
   return (
-    <StudentsShell title="Import from Excel">
+    <StudentsShell width="form" title="Import from Excel">
       <Suspense fallback={<Loading />}>
         <Import />
       </Suspense>
@@ -24,7 +24,7 @@ async function Import() {
   return (
     <div className="flex flex-col gap-5">
       <Card className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">1. Download the template</h2>
+        <h2 className="font-heading text-section font-bold">1. Download the template</h2>
         <p className="text-ink/70">
           It has a sheet each for Students, Guardians and Classes, and a README sheet that explains
           every column. The class lists match your school.
@@ -44,7 +44,7 @@ async function Import() {
           submitLabel="Check the file"
           pendingLabel="Checking…"
         >
-          <h2 className="font-heading text-lg font-bold">2. Upload the filled-in file</h2>
+          <h2 className="font-heading text-section font-bold">2. Upload the filled-in file</h2>
           <p className="text-ink/70">
             Kiota checks every row and shows you any problems. Nothing is saved until you confirm.
           </p>

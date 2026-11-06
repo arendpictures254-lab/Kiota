@@ -34,7 +34,7 @@ function Count({ n, label }: { n: number; label: string }) {
 
 function IssueList({ issues, tone }: { issues: Issue[]; tone: "error" | "warning" }) {
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
       {issues.map((i, k) => (
         <li
           key={k}
@@ -66,7 +66,7 @@ async function Batch({ params }: Pick<Props, "params">) {
     const s = batch.summary as unknown as ImportSummary;
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="font-heading text-2xl font-bold">Import complete</h1>
+        <h1 className="font-heading text-title font-bold">Import complete</h1>
         <Notice tone="success">
           {batch.fileName} was imported. {s.studentsNew} new students, {s.studentsUpdated} updated,{" "}
           {s.guardianRows} guardian links.
@@ -89,7 +89,7 @@ async function Batch({ params }: Pick<Props, "params">) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-heading text-2xl font-bold">Check before importing</h1>
+        <h1 className="font-heading text-title font-bold">Check before importing</h1>
         <p className="text-ink/70">{batch.fileName}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -103,7 +103,7 @@ async function Batch({ params }: Pick<Props, "params">) {
 
       {errors.length ? (
         <section className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold text-status-overdue">
+          <h2 className="font-heading text-section font-bold text-status-overdue">
             {errors.length} problem{errors.length === 1 ? "" : "s"} to fix
           </h2>
           <p className="text-ink/70">
@@ -117,7 +117,7 @@ async function Batch({ params }: Pick<Props, "params">) {
 
       {warnings.length ? (
         <section className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold text-status-due">
+          <h2 className="font-heading text-section font-bold text-status-due">
             {warnings.length} thing{warnings.length === 1 ? "" : "s"} to check
           </h2>
           <p className="text-ink/70">These will not stop the import.</p>
@@ -142,7 +142,7 @@ async function Batch({ params }: Pick<Props, "params">) {
           pendingLabel="Checking…"
           variant={errors.length ? "primary" : "secondary"}
         >
-          <h2 className="font-heading text-lg font-bold">Upload a corrected file</h2>
+          <h2 className="font-heading text-section font-bold">Upload a corrected file</h2>
           <Field
             label="Excel file"
             name="file"

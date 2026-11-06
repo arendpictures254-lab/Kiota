@@ -33,6 +33,7 @@ async function Pay({ params }: Pick<PageProps<"/parent/[linkId]/pay">, "params">
 
   return (
     <ParentShell
+      width="form"
       t={t}
       kids={children}
       current={linkId}

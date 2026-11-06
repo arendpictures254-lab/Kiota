@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { E2E_ENV } from "../playwright.config";
-import { signIn } from "./helpers";
+import { openSection, signIn } from "./helpers";
 
 // Runs once (mobile first). Peter Otieno is Bahari Academy's Bursar; Amina Said its Director.
 test.beforeEach(({}, testInfo) => {
@@ -22,7 +22,7 @@ test("Bursar records cash, prints a thermal receipt and reverses it with a reaso
     };
   });
   await signIn(page, "0711000002", "+254711000002");
-  await page.getByRole("link", { name: "Fees" }).click();
+  await openSection(page, "Fees");
   await page.getByRole("link", { name: "Record a payment" }).click();
 
   await page.getByLabel("Admission number").fill("BA/2025/002");
@@ -114,14 +114,19 @@ test("a simulated M-Pesa payment appears with its receipt", async ({ page }) => 
 test("the Director sees collected vs expected, and is told about reversals", async ({ page }) => {
   await signIn(page, "0711000001", "+254711000001");
   await expect(page.getByText(/reversed/i).first()).toBeVisible(); // notification from the seed
-  await page.getByRole("link", { name: "Fees" }).click();
+  await openSection(page, "Fees");
   await page.getByRole("link", { name: "Reports" }).click();
   await expect(
     page.getByRole("heading", { name: "Collected vs expected · Term 1 2027" }),
   ).toBeVisible();
   await expect(page.getByText(/of KES [\d,]+ expected/)).toBeVisible();
-  await expect(page.getByRole("cell", { name: /Tuition/ })).toBeVisible();
-  await expect(page.getByRole("cell", { name: /Grade 7/ }).first()).toBeVisible();
+  // A table on a laptop, stacked rows on a phone.
+  await expect(
+    page.getByText("Tuition", { exact: true }).filter({ visible: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Grade 7", { exact: true }).filter({ visible: true }).first(),
+  ).toBeVisible();
   const href = await page
     .getByRole("link", { name: /Export everything to Excel/ })
     .getAttribute("href");

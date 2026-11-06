@@ -48,7 +48,7 @@ async function Terms() {
       {structure.years.length > 0 ? (
         <Card>
           <ActionForm action={addTermAction} submitLabel="Add term">
-            <h2 className="font-heading text-lg font-bold">Add a term</h2>
+            <h2 className="font-heading text-section font-bold">Add a term</h2>
             <Select
               label="Academic year"
               name="academicYearId"
@@ -66,7 +66,7 @@ async function Terms() {
 
       <Card>
         <ActionForm action={addYearAction} submitLabel="Add academic year" variant="secondary">
-          <h2 className="font-heading text-lg font-bold">Add an academic year</h2>
+          <h2 className="font-heading text-section font-bold">Add an academic year</h2>
           <Field label="Year name" name="name" id="year-name" placeholder="2027" required />
           <Field label="Starts" name="startDate" id="year-start" type="date" required />
           <Field label="Ends" name="endDate" id="year-end" type="date" required />

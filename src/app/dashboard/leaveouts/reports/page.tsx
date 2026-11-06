@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { DataTable } from "@/components/data-table";
 import { Loading, Notice } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { nairobiInput, whenText } from "@/lib/leaveout/rules";
@@ -56,7 +57,7 @@ async function Reports({
         </label>
         <button
           type="submit"
-          className="h-11 rounded-xl border border-teal/30 bg-white px-4 font-semibold text-teal"
+          className="min-h-11 rounded-xl border border-teal/30 bg-white px-4 font-semibold text-teal"
         >
           Show
         </button>
@@ -64,41 +65,37 @@ async function Reports({
       <p className="text-ink/80">{r.total} leave-outs approved in this period.</p>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Per class and reason</h2>
-        <div className="overflow-x-auto rounded-2xl border border-ink/10 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink/60">
-                <th className="p-2">Class</th>
-                {r.reasons.map((x) => (
-                  <th key={x} className="p-2">
-                    {x}
-                  </th>
-                ))}
-                <th className="p-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.byClass.map((c) => (
-                <tr key={c.cls} className="border-t border-ink/10">
-                  <td className="p-2 font-semibold">{c.cls}</td>
-                  {c.counts.map((n, i) => (
-                    <td key={r.reasons[i]} className="p-2">
-                      {n || ""}
-                    </td>
-                  ))}
-                  <td className="p-2 font-semibold">{c.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <h2 className="font-heading text-section font-bold">Per class and reason</h2>
+        <DataTable
+          caption="Leave-outs per class and reason"
+          empty="No leave-outs in this period."
+          columns={[
+            { key: "cls", label: "Class", width: "11rem" },
+            ...r.reasons.map((x, i) => ({ key: `r${i}`, label: x, align: "right" as const })),
+            { key: "total", label: "Total", align: "right", width: "6rem" },
+          ]}
+          mobile={{ title: "cls", subtitle: ["summary"], value: "total" }}
+          rows={r.byClass.map((c) => ({
+            id: c.cls,
+            cells: {
+              cls: { node: c.cls, sort: c.cls },
+              total: { node: c.total, sort: c.total },
+              summary: {
+                node: c.counts
+                  .map((n, i) => (n ? `${r.reasons[i]} ${n}` : ""))
+                  .filter(Boolean)
+                  .join(" · "),
+              },
+              ...Object.fromEntries(c.counts.map((n, i) => [`r${i}`, { node: n || "", sort: n }])),
+            },
+          }))}
+        />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Late back ({r.late.length})</h2>
+        <h2 className="font-heading text-section font-bold">Late back ({r.late.length})</h2>
         {r.late.length === 0 ? <p className="text-ink/60">Nobody was late.</p> : null}
-        <ul className="flex flex-col gap-2">
+        <ul className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
           {r.late.map((l) => (
             <li key={l.id}>
               <Link
@@ -121,8 +118,8 @@ async function Reports({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">By approver</h2>
-        <ul className="flex flex-col gap-1">
+        <h2 className="font-heading text-section font-bold">By approver</h2>
+        <ul className="grid gap-1 md:grid-cols-2 xl:grid-cols-3">
           {r.byApprover.map((a) => (
             <li key={a.name} className="flex justify-between rounded-xl bg-white px-3 py-2">
               <span>{a.name}</span>

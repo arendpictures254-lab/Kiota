@@ -35,6 +35,7 @@ async function Guardian({ params }: Pick<Props, "params">) {
 
   return (
     <StudentsShell
+      width="form"
       title={g.name}
       back={{ href: `/dashboard/students/${s.id}`, label: "Back to student" }}
     >

@@ -50,10 +50,17 @@ export function SignInForm({ text }: { text: Text }) {
           required
           error={state.error}
         />
-        <Button type="submit" name="intent" value="verify" disabled={pending}>
+        <Button wide type="submit" name="intent" value="verify" disabled={pending}>
           {pending ? text["signin.checking"] : text["signin.signIn"]}
         </Button>
-        <Button type="submit" name="intent" value="resend" variant="secondary" disabled={pending}>
+        <Button
+          wide
+          type="submit"
+          name="intent"
+          value="resend"
+          variant="secondary"
+          disabled={pending}
+        >
           {text["signin.resend"]}
         </Button>
         <a href="/sign-in" className="text-center text-sm font-semibold text-teal">
@@ -78,7 +85,7 @@ export function SignInForm({ text }: { text: Text }) {
         error={state.error}
         hint={text["signin.phoneHint"]}
       />
-      <Button type="submit" name="intent" value="send" disabled={pending}>
+      <Button wide type="submit" name="intent" value="send" disabled={pending}>
         {pending ? text["signin.sending"] : text["signin.send"]}
       </Button>
     </form>

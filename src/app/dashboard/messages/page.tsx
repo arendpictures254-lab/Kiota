@@ -56,7 +56,7 @@ async function Hub() {
       <Card className={low ? "border-status-due/50 bg-status-due/5" : ""}>
         <p className="text-sm text-ink/70">Messaging wallet</p>
         <p
-          className={`font-heading text-3xl font-bold ${w.balanceCents < 0 ? "text-status-overdue" : "text-teal"}`}
+          className={`font-heading text-display font-bold ${w.balanceCents < 0 ? "text-status-overdue" : "text-teal"}`}
         >
           {kes(w.balanceCents)}
         </p>
@@ -69,7 +69,7 @@ async function Hub() {
       {canSendNotices(actor.permissions) ? (
         <ButtonLink href="/dashboard/messages/new">Send a notice</ButtonLink>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {links
           .filter((l) => l[3])
           .map(([href, title, hint]) => (
@@ -86,8 +86,8 @@ async function Hub() {
       </ul>
       {notices.length ? (
         <section className="flex flex-col gap-2">
-          <h2 className="font-heading text-lg font-bold">Recent notices</h2>
-          <ul className="flex flex-col gap-2">
+          <h2 className="font-heading text-section font-bold">Recent notices</h2>
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
             {notices.map((n) => (
               <li key={n.id}>
                 <Link

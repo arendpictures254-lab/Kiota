@@ -30,6 +30,10 @@ export const en = {
   "signin.runningSchool": "Running a school?",
   "signin.demo": "Book a demo",
 
+  "signin.tagline": "Every child, one place.",
+  "signin.point1": "Fees, receipts and M-Pesa payments",
+  "signin.point2": "Notices and messages from school",
+  "signin.point3": "Leave-outs and boarding, safely",
   "choose.title": "How do you want to use Kiota?",
   "choose.staff": "Staff",
   "choose.staffHint": "Your work at school",
@@ -90,6 +94,9 @@ export const en = {
   "child.inCredit": "{amount} in credit",
   "child.newNotices": "{n} new",
   "child.notFound": "This child is not linked to your account.",
+  "child.latestNotices": "Latest notices",
+  "child.latestReceipts": "Latest receipts",
+  "child.seeAll": "See all",
   "child.switch": "Choose a child",
 
   "fees.title": "Fees",

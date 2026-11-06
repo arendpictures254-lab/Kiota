@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
 import { E2E_ENV } from "../playwright.config";
-import { signIn } from "./helpers";
+import { openSection, signIn } from "./helpers";
 
 test("Director signs in, invites a staff member and grants leave-out approval", async ({
   page,
@@ -13,9 +13,9 @@ test("Director signs in, invites a staff member and grants leave-out approval", 
   await signIn(page, "0711 000 001", "+254711000001");
 
   await expect(page.getByRole("heading", { name: "Hello, Amina Said" })).toBeVisible();
-  await expect(page.getByText("Bahari Academy").filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Bahari Academy")).toBeVisible();
 
-  await page.getByRole("link", { name: "Staff" }).click();
+  await openSection(page, "Staff");
   await expect(page.getByRole("heading", { name: "Staff" })).toBeVisible();
   await page.getByRole("link", { name: "Invite staff" }).click();
 
@@ -34,7 +34,7 @@ test("Director signs in, invites a staff member and grants leave-out approval", 
   await expect(page.getByText("They can now approve leave-outs.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Withdraw leave-out approval" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Staff" }).click();
+  await openSection(page, "Staff");
   const row = page.getByRole("link", { name: new RegExp(name) });
   await expect(row).toContainText("Can approve leave-outs");
 

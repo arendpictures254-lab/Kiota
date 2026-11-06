@@ -33,11 +33,11 @@ async function Status({ params, searchParams }: PageProps<"/parent/[linkId]/pay/
     (status.state === "waiting" || status.state === "checking") && waited >= TIMEOUT_SECONDS;
 
   return (
-    <ParentShell t={t} kids={children} current={linkId} isStaff={isStaff}>
+    <ParentShell width="form" t={t} kids={children} current={linkId} isStaff={isStaff}>
       <Card className="flex flex-col gap-3">
         {status.state === "done" ? (
           <div role="status" className="flex flex-col gap-3">
-            <h1 className="font-heading text-2xl font-bold text-status-paid">{t("pay.done")}</h1>
+            <h1 className="font-heading text-title font-bold text-status-paid">{t("pay.done")}</h1>
             <p className="text-ink/80">
               {money(status.amountCents)} · {child.firstName} {child.lastName}
             </p>
@@ -47,7 +47,7 @@ async function Status({ params, searchParams }: PageProps<"/parent/[linkId]/pay/
           </div>
         ) : status.state === "failed" ? (
           <div role="alert" className="flex flex-col gap-3">
-            <h1 className="font-heading text-2xl font-bold text-status-overdue">
+            <h1 className="font-heading text-title font-bold text-status-overdue">
               {t("pay.failed")}
             </h1>
             {status.detail ? <p className="text-ink/80">{status.detail}</p> : null}
@@ -55,13 +55,13 @@ async function Status({ params, searchParams }: PageProps<"/parent/[linkId]/pay/
           </div>
         ) : timedOut || status.state === "unknown" ? (
           <div className="flex flex-col gap-3">
-            <h1 className="font-heading text-2xl font-bold text-ink">{t("pay.timeout")}</h1>
+            <h1 className="font-heading text-title font-bold text-ink">{t("pay.timeout")}</h1>
             <p className="text-ink/80">{t("pay.timeoutHint")}</p>
             <ButtonLink href={`/parent/${linkId}/pay`}>{t("pay.tryAgain")}</ButtonLink>
           </div>
         ) : (
           <div role="status" className="flex flex-col gap-2">
-            <h1 className="font-heading text-2xl font-bold text-ink">{t("pay.waiting")}</h1>
+            <h1 className="font-heading text-title font-bold text-ink">{t("pay.waiting")}</h1>
             <p className="text-ink/80">
               {status.state === "checking" ? t("pay.checking") : t("pay.waitingHint")}
             </p>

@@ -26,7 +26,7 @@ async function Levels() {
         <Card key={level.id} className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-heading text-lg font-bold">{level.name}</h2>
+              <h2 className="font-heading text-section font-bold">{level.name}</h2>
               <p className="text-sm text-ink/60">{level.classes.map((c) => c.name).join(", ")}</p>
             </div>
             <span

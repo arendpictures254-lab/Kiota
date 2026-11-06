@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { signIn } from "./helpers";
+import { openSection, signIn } from "./helpers";
 
 const samples = path.resolve("docs/samples");
 
@@ -15,7 +15,7 @@ test("Director downloads the template, fixes an import error, imports and finds 
   await signIn(page, "0711000001", "+254711000001"); // Amina Said, Director of Bahari Academy
   await expect(page.getByRole("heading", { name: "Hello, Amina Said" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Students" }).click();
+  await openSection(page, "Students");
   await page.getByRole("link", { name: "Import from Excel" }).click();
 
   // 1. Download the template.

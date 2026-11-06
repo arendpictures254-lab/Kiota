@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { ButtonLink, Loading, Shell } from "@/components/ui";
+import { ButtonLink, Loading } from "@/components/ui";
 import { requireSchool } from "@/lib/auth/context";
 import { platformDb } from "@/lib/db";
 import { formatPhone } from "@/lib/phone";
@@ -13,15 +13,11 @@ export const metadata: Metadata = { title: "Staff · Kiota" };
 
 export default function StaffPage() {
   return (
-    <Shell
-      title="Staff"
-      back={{ href: "/dashboard", label: "Dashboard" }}
-      aside={<SignOutButton />}
-    >
+    <AppShell title="Staff" back={{ href: "/dashboard", label: "Dashboard" }} width="wide">
       <Suspense fallback={<Loading />}>
         <StaffList />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -38,7 +34,7 @@ async function StaffList() {
       {ctx.permissions.has("staff.manage") ? (
         <ButtonLink href="/dashboard/staff/invite">Invite staff</ButtonLink>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {staff.map((s) => (
           <li key={s.membershipId}>
             <Link

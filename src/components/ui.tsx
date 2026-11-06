@@ -16,20 +16,41 @@ const variants: Record<Variant, string> = {
 const base =
   "inline-flex h-12 w-full items-center justify-center rounded-xl px-5 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal disabled:cursor-not-allowed";
 
+/**
+ * From 640 px buttons fit their label (left-aligned). "wide" keeps them full width (narrow
+ * forms, small boxes), and so does a button given its own width (w-12, w-24...).
+ */
+const fit = (wide: boolean | undefined, className: string) =>
+  wide || /(^|\s)(sm:|md:|lg:)?(max-)?w-/.test(className)
+    ? ""
+    : "sm:w-auto sm:min-w-48 sm:self-start";
+
 export function Button({
   variant = "primary",
   className = "",
+  wide,
   ...props
-}: ComponentProps<"button"> & { variant?: Variant }) {
-  return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
+}: ComponentProps<"button"> & { variant?: Variant; wide?: boolean }) {
+  return (
+    <button
+      className={`${base} ${fit(wide, className)} ${variants[variant]} ${className}`}
+      {...props}
+    />
+  );
 }
 
 export function ButtonLink({
   variant = "primary",
   className = "",
+  wide,
   ...props
-}: ComponentProps<typeof Link> & { variant?: Variant }) {
-  return <Link className={`${base} ${variants[variant]} ${className}`} {...props} />;
+}: ComponentProps<typeof Link> & { variant?: Variant; wide?: boolean }) {
+  return (
+    <Link
+      className={`${base} ${fit(wide, className)} ${variants[variant]} ${className}`}
+      {...props}
+    />
+  );
 }
 
 export function Field({
@@ -129,6 +150,24 @@ export function Checkbox({
   );
 }
 
+/** Cards in 1, 2, 3 or 4 columns as the screen widens (dashboards and lists). */
+export function CardGrid({
+  children,
+  max = 3,
+  className = "",
+}: {
+  children: ReactNode;
+  max?: 2 | 3 | 4;
+  className?: string;
+}) {
+  const cols = {
+    2: "sm:grid-cols-2",
+    3: "sm:grid-cols-2 xl:grid-cols-3",
+    4: "sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4",
+  }[max];
+  return <div className={`grid grid-cols-1 gap-3 ${cols} ${className}`}>{children}</div>;
+}
+
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`rounded-2xl border border-ink/10 bg-white p-5 ${className}`}>{children}</div>
@@ -157,22 +196,35 @@ export function Notice({
   );
 }
 
-/** Page frame: logo bar and a single centred column. */
+const SHELL_WIDTH = {
+  wide: "max-w-[1440px]",
+  form: "max-w-[720px]",
+  reading: "max-w-[760px]",
+  narrow: "max-w-[480px]",
+} as const;
+
+/**
+ * Page frame for pages outside a school (sign-in, choosing a school, account): a full-width
+ * logo bar and one column sized for the page type. Pages inside a school use AppShell (sidebar
+ * and tabs) from "@/components/app-shell".
+ */
 export function Shell({
   children,
   title,
   back,
   aside,
+  width = "form",
 }: {
   children: ReactNode;
   title?: string;
   back?: { href: string; label: string };
   aside?: ReactNode;
+  width?: keyof typeof SHELL_WIDTH;
 }) {
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b border-ink/10 bg-cream print:hidden">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
+        <div className="mx-auto flex h-14 w-full max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-10">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/brand/kiota-icon.svg" alt="" width={28} height={28} />
             <span className="font-heading text-lg font-bold text-teal">Kiota</span>
@@ -180,13 +232,18 @@ export function Shell({
           {aside}
         </div>
       </header>
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
+      <main
+        className={`mx-auto flex w-full ${SHELL_WIDTH[width]} flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:py-10`}
+      >
         {back ? (
-          <Link href={back.href} className="text-sm font-semibold text-teal print:hidden">
+          <Link
+            href={back.href}
+            className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-teal print:hidden"
+          >
             ← {back.label}
           </Link>
         ) : null}
-        {title ? <h1 className="font-heading text-2xl font-bold text-ink">{title}</h1> : null}
+        {title ? <h1 className="font-heading text-title font-bold text-ink">{title}</h1> : null}
         {children}
       </main>
     </div>

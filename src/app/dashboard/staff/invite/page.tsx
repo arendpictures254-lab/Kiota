@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Loading, Shell } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { requireSchool } from "@/lib/auth/context";
 import { RoleOptions } from "../role-options";
 import { InviteForm } from "./invite-form";
@@ -11,15 +11,11 @@ export const metadata: Metadata = { title: "Invite staff · Kiota" };
 
 export default function InvitePage() {
   return (
-    <Shell
-      title="Invite staff"
-      back={{ href: "/dashboard/staff", label: "Staff" }}
-      aside={<SignOutButton />}
-    >
+    <AppShell title="Invite staff" back={{ href: "/dashboard/staff", label: "Staff" }} width="form">
       <Suspense fallback={<Loading />}>
         <Guarded />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 

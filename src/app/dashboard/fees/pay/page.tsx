@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Record a payment · Kiota" };
 
 export default function PayPage({ searchParams }: PageProps<"/dashboard/fees/pay">) {
   return (
-    <FeesShell title="Record a payment">
+    <FeesShell width="form" title="Record a payment">
       <Suspense fallback={<Loading />}>
         <Pay searchParams={searchParams} />
       </Suspense>

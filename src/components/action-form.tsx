@@ -14,7 +14,8 @@ export function ActionForm({
   pendingLabel = "Saving…",
   variant = "primary",
   children,
-  className = "flex flex-col gap-4",
+  className,
+  wide,
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   submitLabel: string;
@@ -22,14 +23,16 @@ export function ActionForm({
   variant?: "primary" | "secondary" | "danger";
   children?: ReactNode;
   className?: string;
+  /** Full-width button. Forms given their own className (small inline forms) get it anyway. */
+  wide?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
-    <form action={formAction} className={className}>
+    <form action={formAction} className={className ?? "flex flex-col gap-4"}>
       {children}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
       {state.ok ? <Notice tone="success">{state.ok}</Notice> : null}
-      <Button type="submit" variant={variant} disabled={pending}>
+      <Button type="submit" variant={variant} disabled={pending} wide={wide ?? !!className}>
         {pending ? pendingLabel : submitLabel}
       </Button>
     </form>

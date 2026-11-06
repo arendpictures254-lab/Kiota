@@ -34,6 +34,7 @@ async function NewRequest({ params }: Pick<PageProps<"/parent/[linkId]/leaveouts
   start.setUTCHours(11, 0, 0, 0); // 14:00 Nairobi
   return (
     <ParentShell
+      width="form"
       t={t}
       kids={children}
       current={linkId}

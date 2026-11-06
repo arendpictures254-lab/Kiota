@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ActionForm } from "@/components/action-form";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Card, Loading, Select, Shell } from "@/components/ui";
+import { Card, Loading, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth/context";
 import { platformDb } from "@/lib/db";
 import { DEMO_STATUSES, SCHOOL_TYPES, listDemoRequests } from "@/lib/demo/service";
@@ -14,15 +14,16 @@ export const metadata: Metadata = { title: "Demo requests · Kiota" };
 
 export default function DemoRequestsPage() {
   return (
-    <Shell
+    <AppShell
       title="Demo requests"
       back={{ href: "/admin", label: "Schools" }}
-      aside={<SignOutButton />}
+      width="wide"
+      nav="admin"
     >
       <Suspense fallback={<Loading />}>
         <Requests />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -33,7 +34,7 @@ async function Requests() {
   if (requests.length === 0) return <p className="text-ink/70">No demo requests yet.</p>;
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
       {requests.map((r) => (
         <li key={r.id}>
           <Card className="flex flex-col gap-2">

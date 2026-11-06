@@ -47,7 +47,7 @@ async function Mpesa({ searchParams }: Pick<PageProps<"/dashboard/fees/mpesa">, 
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">Needs attention</h2>
+        <h2 className="font-heading text-section font-bold">Needs attention</h2>
         {attention.length === 0 ? <Notice tone="success">Nothing in suspense.</Notice> : null}
         {attention.map((t) => (
           <Card key={t.id} className="flex flex-col gap-3">
@@ -103,7 +103,7 @@ async function Mpesa({ searchParams }: Pick<PageProps<"/dashboard/fees/mpesa">, 
           submitLabel="Send payment prompt"
           pendingLabel="Sending…"
         >
-          <h2 className="font-heading text-lg font-bold">Send an M-Pesa prompt</h2>
+          <h2 className="font-heading text-section font-bold">Send an M-Pesa prompt</h2>
           <p className="text-sm text-ink/70">
             The parent gets a pop-up on their phone and enters their M-Pesa PIN. The receipt is
             issued automatically when Safaricom confirms.
@@ -127,11 +127,11 @@ async function Mpesa({ searchParams }: Pick<PageProps<"/dashboard/fees/mpesa">, 
       </Card>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Recent M-Pesa activity</h2>
+        <h2 className="font-heading text-section font-bold">Recent M-Pesa activity</h2>
         {recent.length === 0 ? (
           <p className="text-sm text-ink/60">No M-Pesa payments yet.</p>
         ) : null}
-        <ul className="flex flex-col gap-2">
+        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
           {recent.map((t) => (
             <li
               key={t.id}

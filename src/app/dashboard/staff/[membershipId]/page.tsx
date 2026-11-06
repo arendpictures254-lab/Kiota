@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Card, Loading, Notice, Shell } from "@/components/ui";
+import { Card, Loading, Notice } from "@/components/ui";
 import { requireSchool } from "@/lib/auth/context";
 import { canGrant } from "@/lib/auth/permissions";
 import { platformDb } from "@/lib/db";
@@ -18,11 +18,11 @@ export default function MemberPage({
   searchParams,
 }: PageProps<"/dashboard/staff/[membershipId]">) {
   return (
-    <Shell back={{ href: "/dashboard/staff", label: "Staff" }} aside={<SignOutButton />}>
+    <AppShell back={{ href: "/dashboard/staff", label: "Staff" }} width="form">
       <Suspense fallback={<Loading />}>
         <Member params={params} searchParams={searchParams} />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -50,7 +50,7 @@ async function Member({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-heading text-2xl font-bold text-ink">{member.name}</h1>
+        <h1 className="font-heading text-title font-bold text-ink">{member.name}</h1>
         <p className="text-ink/70">
           {member.roles.map((r) => r.name).join(", ")} · {formatPhone(member.phone)}
         </p>
@@ -61,7 +61,7 @@ async function Member({
       ) : null}
 
       <Card className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">Leave-out approval</h2>
+        <h2 className="font-heading text-section font-bold">Leave-out approval</h2>
         {member.leaveoutFromRole ? (
           <p className="text-sm text-ink/70">Directors can always approve leave-outs.</p>
         ) : (
@@ -83,7 +83,7 @@ async function Member({
 
       {canManage ? (
         <Card className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold">Roles</h2>
+          <h2 className="font-heading text-section font-bold">Roles</h2>
           <RolesForm
             membershipId={member.membershipId}
             roleOptions={<RoleOptions selected={member.roles.map((r) => r.key)} hideLegend />}

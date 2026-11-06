@@ -48,7 +48,7 @@ async function Invoices({ searchParams }: Pick<Props, "searchParams">) {
   return (
     <div className="flex flex-col gap-6">
       <Card className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">Term invoices</h2>
+        <h2 className="font-heading text-section font-bold">Term invoices</h2>
         <p className="text-sm text-ink/70">
           Bills every active student for the term from the fee structures, with sibling discounts
           and bursaries. Students already invoiced are skipped, so it is safe to run again after
@@ -108,7 +108,7 @@ async function Invoices({ searchParams }: Pick<Props, "searchParams">) {
       </Card>
 
       <Card className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">Opening balances</h2>
+        <h2 className="font-heading text-section font-bold">Opening balances</h2>
         <p className="text-sm text-ink/70">
           From the Excel import. Posting puts each one on the student&apos;s ledger as its first
           entry (debts to Arrears, overpayments as credit). This happens once.
@@ -135,7 +135,7 @@ async function Invoices({ searchParams }: Pick<Props, "searchParams">) {
 
       <Card>
         <ActionForm action={addChargeAction} submitLabel="Add charge" variant="secondary">
-          <h2 className="font-heading text-lg font-bold">One-off charge</h2>
+          <h2 className="font-heading text-section font-bold">One-off charge</h2>
           <p className="text-sm text-ink/70">
             A trip, damage, a replacement uniform: added to one student&apos;s account.
           </p>

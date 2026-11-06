@@ -48,7 +48,7 @@ async function Pledges() {
           </ActionForm>
         </Card>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {pledges.map((p) => (
           <li key={p.id}>
             <Card className="flex flex-col gap-2 py-3">

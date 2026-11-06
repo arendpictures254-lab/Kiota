@@ -40,8 +40,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-heading text-xl font-bold">{title}</h2>
+    <section className="flex min-w-0 flex-col gap-3">
+      <h2 className="font-heading text-section font-bold">{title}</h2>
       {intro ? <p className="text-sm text-ink/70">{intro}</p> : null}
       {children}
     </section>
@@ -54,7 +54,7 @@ async function Setup() {
   const vhOptions = s.voteHeads.map((v) => ({ value: v.id, label: v.name }));
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="grid items-start gap-8 xl:grid-cols-2 xl:gap-10">
       <Section
         title="Vote heads"
         intro="Payments go to vote heads in this order: the top one is paid first. Opening balances go to Arrears."

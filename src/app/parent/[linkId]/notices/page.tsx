@@ -26,6 +26,7 @@ async function Notices({ params }: Pick<PageProps<"/parent/[linkId]/notices">, "
 
   return (
     <ParentShell
+      width="reading"
       t={t}
       kids={children}
       current={linkId}

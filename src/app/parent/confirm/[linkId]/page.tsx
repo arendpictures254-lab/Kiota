@@ -25,6 +25,7 @@ async function Confirm({ params }: Pick<PageProps<"/parent/confirm/[linkId]">, "
   if (!pending) {
     return (
       <ParentShell
+        width="form"
         t={t}
         kids={children}
         current={null}
@@ -38,6 +39,7 @@ async function Confirm({ params }: Pick<PageProps<"/parent/confirm/[linkId]">, "
   const vars = { school: pending.schoolName, child: pending.firstName };
   return (
     <ParentShell
+      width="form"
       t={t}
       kids={children}
       current={null}

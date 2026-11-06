@@ -88,7 +88,7 @@ async function Payments({
         </Button>
       </form>
       {rows.length === 0 ? <p className="text-ink/60">No payments found.</p> : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {rows.map((p) => (
           <li key={p.id}>
             <Link

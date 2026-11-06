@@ -94,7 +94,7 @@ async function Hub() {
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl bg-white p-5">
         <p className="text-sm text-ink/60">Received today</p>
-        <p className="font-heading text-3xl font-bold text-teal">{kes(stats.todayCents)}</p>
+        <p className="font-heading text-display font-bold text-teal">{kes(stats.todayCents)}</p>
         <p className="text-sm text-ink/60">
           {stats.todayCount} payment{stats.todayCount === 1 ? "" : "s"}
         </p>
@@ -102,7 +102,7 @@ async function Hub() {
       {can("fees.collect") ? (
         <ButtonLink href="/dashboard/fees/pay">Record a payment</ButtonLink>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
         {links
           .filter(([, , , show]) => show)
           .map(([href, title, text]) => (

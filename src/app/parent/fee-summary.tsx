@@ -30,7 +30,7 @@ export function FeeSummary({
           <p className="text-sm text-ink/70">{t("fees.dueNow")}</p>
           {fees.dueNowCents > 0 ? (
             <p
-              className={`font-heading text-3xl font-bold ${late ? "text-status-overdue" : "text-ink"}`}
+              className={`font-heading text-display font-bold ${late ? "text-status-overdue" : "text-ink"}`}
               data-testid="due-now"
             >
               {money(fees.dueNowCents)}

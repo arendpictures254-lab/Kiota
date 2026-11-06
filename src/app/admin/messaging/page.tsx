@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ActionForm } from "@/components/action-form";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Card, Checkbox, Field, Loading, Select, Shell } from "@/components/ui";
+import { Card, Checkbox, Field, Loading, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth/context";
 import { platformDb } from "@/lib/db";
 import { kes } from "@/lib/fees/allocation";
@@ -14,15 +14,16 @@ export const metadata: Metadata = { title: "Messaging · Arend Studio admin · K
 
 export default function AdminMessagingPage() {
   return (
-    <Shell
+    <AppShell
       title="Messaging wallets"
       back={{ href: "/admin", label: "Schools" }}
-      aside={<SignOutButton />}
+      width="wide"
+      nav="admin"
     >
       <Suspense fallback={<Loading />}>
         <Wallets />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 
@@ -53,7 +54,7 @@ async function Wallets() {
       {wallets.map((w) => (
         <Card key={w.schoolId} className="flex flex-col gap-4">
           <div>
-            <h2 className="font-heading text-lg font-bold">{w.name}</h2>
+            <h2 className="font-heading text-section font-bold">{w.name}</h2>
             <p className="text-sm text-ink/70">
               Balance{" "}
               <strong
@@ -136,7 +137,7 @@ async function Wallets() {
       ))}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-bold">WhatsApp templates</h2>
+        <h2 className="font-heading text-section font-bold">WhatsApp templates</h2>
         <p className="text-sm text-ink/70">
           Mark a template approved only after Meta approves it in WhatsApp Manager. Until then
           parents get the SMS version.

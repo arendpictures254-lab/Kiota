@@ -31,6 +31,7 @@ async function NewGuardian({ params }: Pick<Props, "params">) {
   if (!s) notFound();
   return (
     <StudentsShell
+      width="form"
       title={`Add a guardian for ${fullName(s)}`}
       back={{ href: `/dashboard/students/${s.id}`, label: "Back to student" }}
     >

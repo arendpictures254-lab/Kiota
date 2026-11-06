@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ActionForm } from "@/components/action-form";
+import { DataTable } from "@/components/data-table";
 import { Card, Field, Loading, Notice } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { kes } from "@/lib/fees/allocation";
@@ -51,7 +52,7 @@ async function Wallet() {
       <Card className={low ? "border-status-due/50 bg-status-due/5" : ""}>
         <p className="text-sm text-ink/70">Balance</p>
         <p
-          className={`font-heading text-3xl font-bold ${w.balanceCents < 0 ? "text-status-overdue" : "text-teal"}`}
+          className={`font-heading text-display font-bold ${w.balanceCents < 0 ? "text-status-overdue" : "text-teal"}`}
           data-testid="wallet-balance"
         >
           {kes(w.balanceCents)}
@@ -74,7 +75,7 @@ async function Wallet() {
 
       {canTopUp ? (
         <section className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold">Top up by M-Pesa</h2>
+          <h2 className="font-heading text-section font-bold">Top up by M-Pesa</h2>
           {w.mpesaTopups ? (
             <ActionForm
               action={topupAction}
@@ -107,11 +108,11 @@ async function Wallet() {
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Top-ups</h2>
+        <h2 className="font-heading text-section font-bold">Top-ups</h2>
         {w.topups.length === 0 ? (
           <p className="text-sm text-ink/60">No top-ups yet.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
             {w.topups.map((t) => (
               <li
                 key={t.id}
@@ -154,28 +155,27 @@ async function Wallet() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Usage per month</h2>
+        <h2 className="font-heading text-section font-bold">Usage per month</h2>
         {w.months.length === 0 ? (
           <p className="text-sm text-ink/60">Nothing sent yet.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink/60">
-                <th className="py-1 font-semibold">Month</th>
-                <th className="py-1 text-right font-semibold">Messages</th>
-                <th className="py-1 text-right font-semibold">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {w.months.map((m) => (
-                <tr key={m.month} className="border-t border-ink/10">
-                  <td className="py-2">{monthName(m.month)}</td>
-                  <td className="py-2 text-right">{m.messages}</td>
-                  <td className="py-2 text-right font-semibold">{kes(m.spentCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            caption="Usage per month"
+            columns={[
+              { key: "month", label: "Month" },
+              { key: "messages", label: "Messages", align: "right", width: "9rem" },
+              { key: "cost", label: "Cost", align: "right", width: "9rem" },
+            ]}
+            mobile={{ title: "month", subtitle: ["messages"], value: "cost" }}
+            rows={w.months.map((m) => ({
+              id: m.month,
+              cells: {
+                month: { node: monthName(m.month), sort: m.month },
+                messages: { node: m.messages, sort: m.messages },
+                cost: { node: kes(m.spentCents), sort: m.spentCents },
+              },
+            }))}
+          />
         )}
         <p className="text-sm text-ink/60">
           Automatic messages this month (payment confirmations): {w.automaticThisMonth.messages},{" "}
@@ -184,11 +184,11 @@ async function Wallet() {
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-heading text-lg font-bold">Cost per send</h2>
+        <h2 className="font-heading text-section font-bold">Cost per send</h2>
         {w.campaigns.length === 0 ? (
           <p className="text-sm text-ink/60">No notices or reminders sent yet.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3 [&>li]:min-w-0 [&>li>*]:h-full">
             {w.campaigns.map((c) => (
               <li key={c.id}>
                 <Link
@@ -212,7 +212,7 @@ async function Wallet() {
 
       {canTopUp ? (
         <section className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold">Low-balance alert</h2>
+          <h2 className="font-heading text-section font-bold">Low-balance alert</h2>
           <ActionForm action={thresholdAction} submitLabel="Save alert" variant="secondary">
             <Field
               label="Tell me when the balance drops below (KES)"

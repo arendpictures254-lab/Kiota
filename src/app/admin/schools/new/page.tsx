@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { SignOutButton } from "@/components/sign-out-button";
-import { Loading, Shell } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { requireUser } from "@/lib/auth/context";
 import { db } from "@/lib/db";
 import { CreateSchoolForm } from "./create-school-form";
@@ -11,15 +11,16 @@ export const metadata: Metadata = { title: "Create a school · Kiota" };
 
 export default function NewSchoolPage() {
   return (
-    <Shell
+    <AppShell
       title="Create a school"
       back={{ href: "/admin", label: "Schools" }}
-      aside={<SignOutButton />}
+      width="form"
+      nav="admin"
     >
       <Suspense fallback={<Loading />}>
         <Guarded />
       </Suspense>
-    </Shell>
+    </AppShell>
   );
 }
 

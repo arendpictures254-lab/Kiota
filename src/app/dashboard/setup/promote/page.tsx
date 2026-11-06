@@ -65,7 +65,7 @@ async function Promote({
 
       {plan ? (
         <Card className="flex flex-col gap-3">
-          <h2 className="font-heading text-lg font-bold">
+          <h2 className="font-heading text-section font-bold">
             {plan.toClass
               ? `${plan.fromClass.name} → ${plan.toClass.name}`
               : `${plan.fromClass.name} → Graduated`}

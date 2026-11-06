@@ -27,6 +27,7 @@ async function Pass({ params }: Pick<PageProps<"/parent/[linkId]/leaveouts/[id]"
   if (!l || !l.passToken) notFound();
   return (
     <ParentShell
+      width="reading"
       t={t}
       kids={children}
       current={linkId}

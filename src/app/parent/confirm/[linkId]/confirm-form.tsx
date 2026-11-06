@@ -31,10 +31,11 @@ export function ConfirmForm({
           required
           error={state.error}
         />
-        <Button type="submit" name="intent" value="confirm" disabled={pending}>
+        <Button wide type="submit" name="intent" value="confirm" disabled={pending}>
           {pending ? text.checking : text.confirm}
         </Button>
         <Button
+          wide
           type="submit"
           name="intent"
           value="send"
@@ -52,7 +53,7 @@ export function ConfirmForm({
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="linkId" value={linkId} />
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
-      <Button type="submit" name="intent" value="send" disabled={pending}>
+      <Button wide type="submit" name="intent" value="send" disabled={pending}>
         {pending ? text.sending : text.send}
       </Button>
     </form>
