@@ -90,6 +90,18 @@ const paths: Record<string, ReactElement> = {
       <path d="M4.8 16.2c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14 10h4.5M14 13.5h3" />
     </>
   ),
+  stores: (
+    <>
+      <path d="M3 8.5 12 4l9 4.5v10.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+      <path d="M7.5 20v-6h9v6M7.5 17h9" />
+    </>
+  ),
+  kitchen: (
+    <>
+      <path d="M4 11h16v2a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z" />
+      <path d="M2 11h2M20 11h2M9 7c0-1.5 1-1.5 1-3M14 7c0-1.5 1-1.5 1-3" />
+    </>
+  ),
   inbox: (
     <>
       <path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />

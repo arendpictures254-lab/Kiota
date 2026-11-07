@@ -29,6 +29,7 @@ function assertGate(actor: Actor) {
 /** What the gate needs about a pass (no fees, marks or medical: just enough to check the child). */
 const GATE_SELECT = {
   id: true,
+  studentId: true,
   status: true,
   studentName: true,
   admissionNumber: true,
@@ -48,6 +49,8 @@ const GATE_SELECT = {
 
 export type GatePass = {
   id: string;
+  /** Only to match a scanned ID card to its pass offline (no student details come with it). */
+  studentId: string;
   status: string;
   studentName: string;
   admissionNumber: string;
@@ -76,6 +79,7 @@ async function photoDataUrl(key: string | null): Promise<string | null> {
 async function toGatePass(
   l: {
     id: string;
+    studentId: string;
     status: string;
     studentName: string;
     admissionNumber: string;
@@ -96,6 +100,7 @@ async function toGatePass(
 ): Promise<GatePass> {
   return {
     id: l.id,
+    studentId: l.studentId,
     status: l.status,
     studentName: l.studentName,
     admissionNumber: l.admissionNumber,
@@ -126,33 +131,64 @@ async function approverNames(db: PrismaClient, actor: Actor, ids: (string | null
   return new Map(ms.map((m) => [m.userId, m.displayName]));
 }
 
+/** A student ID card as the gate phone keeps it (offline checks). Replaced cards carry no name. */
+export type GateCard = {
+  id: string;
+  nonce: string;
+  live: boolean;
+  studentId: string;
+  name: string | null;
+  admissionNumber: string | null;
+  classLabel: string | null;
+  boarder: boolean | null;
+};
+
 /** Everything the gate phone needs to work offline today and tomorrow. */
 export async function gateBundle({ db }: Deps, actor: Actor, now = new Date()) {
   assertGate(actor);
-  const { key, school, rows, settings } = await withContext(db, ctxOf(actor), async (tx) => ({
-    settings: await settingsIn(tx, actor.schoolId),
-    key: await tx.leaveoutPassKey.findUnique({ where: { schoolId: actor.schoolId } }),
-    school: await tx.school.findUniqueOrThrow({
-      where: { id: actor.schoolId },
-      select: { id: true, name: true },
+  const { key, school, rows, settings, cards } = await withContext(
+    db,
+    ctxOf(actor),
+    async (tx) => ({
+      settings: await settingsIn(tx, actor.schoolId),
+      // Student ID cards, for checking a card offline: who it belongs to, or that it was replaced.
+      cards: await tx.$queryRaw<
+        {
+          card_id: string;
+          nonce: string;
+          live: boolean;
+          valid_until_year: number;
+          student_id: string;
+          first_name: string | null;
+          last_name: string | null;
+          admission_number: string | null;
+          class_label: string | null;
+          boarder: boolean | null;
+        }[]
+      >`SELECT * FROM app_gate_cards()`,
+      key: await tx.leaveoutPassKey.findUnique({ where: { schoolId: actor.schoolId } }),
+      school: await tx.school.findUniqueOrThrow({
+        where: { id: actor.schoolId },
+        select: { id: true, name: true },
+      }),
+      rows: await tx.leaveout.findMany({
+        where: {
+          schoolId: actor.schoolId,
+          OR: [
+            { status: "out" },
+            {
+              status: { in: ["approved", "cancelled", "returned"] },
+              leaveAt: { lt: new Date(now.getTime() + 2 * 86_400_000) },
+              returnAt: { gt: new Date(now.getTime() - 86_400_000) },
+            },
+          ],
+        },
+        select: GATE_SELECT,
+        orderBy: { leaveAt: "asc" },
+        take: 2000,
+      }),
     }),
-    rows: await tx.leaveout.findMany({
-      where: {
-        schoolId: actor.schoolId,
-        OR: [
-          { status: "out" },
-          {
-            status: { in: ["approved", "cancelled", "returned"] },
-            leaveAt: { lt: new Date(now.getTime() + 2 * 86_400_000) },
-            returnAt: { gt: new Date(now.getTime() - 86_400_000) },
-          },
-        ],
-      },
-      select: GATE_SELECT,
-      orderBy: { leaveAt: "asc" },
-      take: 2000,
-    }),
-  }));
+  );
   const names = await approverNames(
     db,
     actor,
@@ -173,6 +209,16 @@ export async function gateBundle({ db }: Deps, actor: Actor, now = new Date()) {
     generatedAt: now.toISOString(),
     /** The school's rule: how early before the leave time a child may go. */
     earlyExitMinutes: settings.leaveoutEarlyExitMinutes,
+    cards: cards.map((c): GateCard => ({
+      id: c.card_id,
+      nonce: c.nonce,
+      live: c.live,
+      studentId: c.student_id,
+      name: c.live ? `${c.first_name} ${c.last_name}` : null,
+      admissionNumber: c.admission_number,
+      classLabel: c.class_label,
+      boarder: c.boarder,
+    })),
     passes,
   };
 }

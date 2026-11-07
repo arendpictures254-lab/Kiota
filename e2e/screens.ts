@@ -21,6 +21,8 @@ export type Role =
   | "boarding"
   | "principal"
   | "secretary"
+  | "storekeeper"
+  | "cook"
   | "admin"
   | "picker"
   | "parent";
@@ -33,6 +35,8 @@ export const PHONES: Record<Exclude<Role, "anon">, string> = {
   boarding: "+254711000005",
   principal: "+254711000006",
   secretary: "+254711000008",
+  storekeeper: "+254711000011",
+  cook: "+254711000012",
   admin: "+254700000001",
   picker: "+254733000001",
   parent: "+254744000001",
@@ -75,6 +79,17 @@ export const SCREENS: Screen[] = [
   { name: "staff-attendance", role: "principal", path: () => "/dashboard/attendance/staff" },
   { name: "idcards", role: "secretary", path: () => "/dashboard/idcards" },
   { name: "photos", role: "secretary", path: () => "/dashboard/students/photos" },
+  { name: "dashboard-storekeeper", role: "storekeeper", path: () => "/dashboard" },
+  { name: "stores", role: "storekeeper", path: () => "/dashboard/stores" },
+  { name: "stores-meal-issue", role: "storekeeper", path: () => "/dashboard/stores/meals" },
+  {
+    name: "stores-uniforms",
+    role: "storekeeper",
+    path: () => "/dashboard/stores/uniforms?adm=BA%2F2024%2F101",
+  },
+  { name: "stores-stocktakes", role: "storekeeper", path: () => "/dashboard/stores/stocktakes" },
+  { name: "stores-reports", role: "director", path: () => "/dashboard/stores/reports" },
+  { name: "kitchen", role: "cook", path: () => "/dashboard/stores/kitchen" },
   { name: "gate", role: "guard", path: () => "/gate" },
   { name: "staff", role: "director", path: () => "/dashboard/staff" },
   { name: "setup", role: "director", path: () => "/dashboard/setup" },

@@ -53,6 +53,35 @@ async function Fees({ params }: Pick<PageProps<"/parent/[linkId]/fees">, "params
           </section>
         ) : null}
 
+        {fees.charges.length ? (
+          <section className="flex flex-col gap-2" data-testid="other-charges">
+            <h2 className="font-heading text-section font-bold">{t("fees.otherCharges")}</h2>
+            <ul className="flex flex-col divide-y divide-ink/5 rounded-2xl border border-ink/10 bg-white">
+              {fees.charges.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-ink">{c.description}</span>
+                    <span className="text-ink/60">{day(c.createdAt, locale)}</span>
+                  </span>
+                  <span className="shrink-0 text-right font-semibold">
+                    <span className={c.reversed ? "text-ink/40 line-through" : "text-ink"}>
+                      {money(c.amountCents)}
+                    </span>
+                    {c.reversed ? (
+                      <span className="block text-xs font-normal text-ink/60">
+                        {t("fees.chargeReversed")}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section className="flex flex-col gap-2">
           <h2 className="font-heading text-section font-bold">{t("fees.invoices")}</h2>
           {fees.invoices.length === 0 ? (

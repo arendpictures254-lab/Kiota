@@ -8,8 +8,11 @@
   cycle Absent → Late → Present; one "Submit register" button. Students on an approved leave-out
   (out, or approved for that time) show as **On leave** and can't be marked.
 - **Register times** (Attendance → Register times and alerts): Morning opens 07:30, cut-off
-  08:30; Afternoon 14:00, cut-off 14:30 by default. Registers not submitted by the cut-off
-  (Monday to Friday) show on the Principal's and Director's dashboards.
+  08:30; Afternoon 14:00, cut-off 14:30 by default. Registers not submitted by the cut-off show
+  on the Principal's and Director's dashboards, on school days.
+- **The school week** (same page): the days registers are expected (Monday to Friday by
+  default), and levels with Saturday classes (e.g. senior school only). Late-register alerts,
+  staff attendance's school days and the lates-by-weekday report follow it.
 - **Corrections:** the same day by whoever took it; on a later day only with `attendance.manage`.
   Every submit and correction is in the audit log (`attendance.submit`, `attendance.correct`).
 
@@ -37,7 +40,9 @@ Attendance → Reports: whole school and per stream (% present or late of regist
 leave doesn't count), students absent 3 days or more, often late, lates by weekday, and an
 Excel export. Each student's profile shows their % this term (the last four weeks when no term is
 running), days absent, lates and a calendar. Parents see the same in the portal when the school
-switches on "Attendance in the parent portal".
+switches on "Attendance in the parent portal": this term's dates come through the parent-safe
+`app_parent_current_term()` function (from their own confirmed link), with the last four weeks
+when no term is running.
 
 ## Student photos
 
@@ -61,7 +66,11 @@ switches on "Attendance in the parent portal".
   so the tuck shop and library can use it later.
 - **At the gate** a scanned ID card shows the student's photo, name and class, and
   **No valid leave-out** unless they have an approved pass (then the pass is checked as usual).
-  Offline it shows "Can't check offline".
+  Offline, the phone checks the card's signature with the school's key and finds the student in
+  its downloaded copy of the school's cards (`app_gate_cards()`: name, class and boarder/day,
+  never more); the photo shows when the student has a pass on the phone. With no cached pass it
+  says "No valid leave-out", the same as online. A card the phone doesn't know yet: "Can't check
+  offline".
 - **Lost card:** the profile's ID card section → Reissue. The old card is revoked at once (its
   QR then shows "This card was replaced").
 

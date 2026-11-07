@@ -101,11 +101,11 @@ export function Select({
 }) {
   const id = select.id ?? select.name;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-semibold text-ink">
         {label}
       </label>
-      <select id={id} className={`h-12 ${control}`} {...select}>
+      <select id={id} className={`h-12 w-full min-w-0 ${control}`} {...select}>
         {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
         {options.map((o) => (
           <option key={o.value} value={o.value}>

@@ -113,7 +113,21 @@ export function sections(
 // Attendance (when the school switches the "attendance" module on)
 // ---------------------------------------------------------------------------
 
-/** The child's attendance over the last four weeks, through app_parent_attendance(). */
+/** The school's current term for this child (through the parent's own confirmed link). */
+export async function childCurrentTerm(deps: Deps, userId: string, linkId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(linkId)) return null;
+  const [t] = await scopedDb(deps.db, { userId, schoolId: null }).$queryRaw<
+    { name: string; academic_year: string; start_date: Date; end_date: Date }[]
+  >`SELECT * FROM app_parent_current_term(${linkId}::uuid)`;
+  return t
+    ? { name: t.name, year: t.academic_year, startDate: t.start_date, endDate: t.end_date }
+    : null;
+}
+
+/**
+ * The child's attendance this term (the last four weeks when no term is running), through
+ * app_parent_attendance() and app_parent_current_term(). `term` is null in the fallback.
+ */
 export async function childAttendance(
   deps: Deps,
   userId: string,
@@ -121,13 +135,23 @@ export async function childAttendance(
   now = new Date(),
 ) {
   if (!/^[0-9a-f-]{36}$/i.test(linkId)) return null;
-  const rows = await scopedDb(deps.db, { userId, schoolId: null }).$queryRaw<
-    { date: Date; session: string; status: string }[]
-  >`SELECT * FROM app_parent_attendance(${linkId}::uuid)`;
+  const [rows, term] = await Promise.all([
+    scopedDb(deps.db, { userId, schoolId: null }).$queryRaw<
+      { date: Date; session: string; status: string }[]
+    >`SELECT * FROM app_parent_attendance(${linkId}::uuid)`,
+    childCurrentTerm(deps, userId, linkId),
+  ]);
   const today = nairobiDate(now);
-  const from = new Date(today.getTime() - 27 * 86_400_000);
-  const recent = rows.filter((r) => r.date >= from);
-  return summarise(recent, { label: "Last 4 weeks", from, to: today });
+  const from = term ? term.startDate : new Date(today.getTime() - 27 * 86_400_000);
+  const recent = rows.filter((r) => r.date >= from && r.date <= today);
+  return {
+    ...summarise(recent, {
+      label: term ? `${term.name} ${term.year}` : "Last 4 weeks",
+      from,
+      to: today,
+    }),
+    term,
+  };
 }
 
 export function childLabel(c: Pick<ChildLink, "className" | "streamName">) {
@@ -140,24 +164,27 @@ export function childLabel(c: Pick<ChildLink, "className" | "streamName">) {
 
 /**
  * Split what a child owes into what is due now (overdue plus anything due today), the rest of
- * the year (instalments not due yet) and arrears (unpaid balances from previous terms). Payments
- * clear the oldest debts first, so what is still owed sits on the newest invoice first; anything
- * beyond that invoice is arrears. Pure, for tests.
+ * the year (instalments not due yet), one-off charges since the newest invoice (uniforms, a trip:
+ * due now) and arrears (unpaid balances from previous terms). Payments clear the oldest debts
+ * first, so what is still owed sits on the newest charges and invoice first; anything beyond them
+ * is arrears. Pure, for tests.
  */
 export function splitBalance(
   balanceCents: number,
   newest: { totalCents: number; installments: { dueDate: Date; percentBp: number }[] } | null,
   now: Date,
+  recentChargesCents = 0,
 ) {
-  const owed = Math.max(0, balanceCents);
+  const chargesCents = Math.min(Math.max(0, balanceCents), Math.max(0, recentChargesCents));
+  const owed = Math.max(0, balanceCents) - chargesCents;
   const notYetDue = newest
     ? Math.min(newest.totalCents - dueByDate(newest.totalCents, newest.installments, now), owed)
     : 0;
-  const dueNowCents = owed - notYetDue;
   const arrearsCents = Math.min(
-    dueNowCents,
-    newest ? Math.max(0, balanceCents - newest.totalCents) : owed,
+    owed - notYetDue,
+    newest ? Math.max(0, owed - newest.totalCents) : owed,
   );
+  const dueNowCents = owed - notYetDue + chargesCents;
   const next = newest?.installments
     .filter((i) => i.dueDate > now)
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime())[0];
@@ -172,7 +199,7 @@ export function splitBalance(
           ),
         }
       : null;
-  return { dueNowCents, restOfYearCents: notYetDue, arrearsCents, nextDue };
+  return { dueNowCents, restOfYearCents: notYetDue, arrearsCents, chargesCents, nextDue };
 }
 
 type FeesJson = {
@@ -197,6 +224,13 @@ type FeesJson = {
     reversed: boolean;
   }[];
   mpesa: boolean;
+  charges?: {
+    id: string;
+    description: string;
+    amountCents: number;
+    createdAt: string;
+    reversed: boolean;
+  }[];
 };
 
 export type ChildFees = Awaited<ReturnType<typeof childFees>>;
@@ -229,7 +263,17 @@ export async function childFees({ db }: Deps, userId: string, linkId: string, no
       overdueSince: missed,
     };
   });
-  const split = splitBalance(balance, invoices[0] ?? null, now);
+  const charges = (f.charges ?? []).map((c) => ({
+    ...c,
+    amountCents: Number(c.amountCents),
+    createdAt: new Date(c.createdAt),
+  }));
+  // One-off charges since the newest invoice are the newest debts (cleared last).
+  const newestAt = f.invoices[0] ? new Date(f.invoices[0].createdAt) : null;
+  const recentCharges = charges
+    .filter((c) => !c.reversed && (!newestAt || c.createdAt > newestAt))
+    .reduce((n, c) => n + c.amountCents, 0);
+  const split = splitBalance(balance, invoices[0] ?? null, now, recentCharges);
   return {
     balanceCents: balance,
     voteHeads: f.voteHeads.map((v) => ({ name: v.name, balanceCents: Number(v.balanceCents) })),
@@ -237,7 +281,10 @@ export async function childFees({ db }: Deps, userId: string, linkId: string, no
     ...split,
     /** The first instalment date missed, if part of "due now" is a missed instalment. */
     missedSince:
-      split.dueNowCents > split.arrearsCents ? (invoices[0]?.overdueSince ?? null) : null,
+      split.dueNowCents - split.chargesCents > split.arrearsCents
+        ? (invoices[0]?.overdueSince ?? null)
+        : null,
+    charges,
     payments: f.payments.map((p) => ({ ...p, paidAt: new Date(p.paidAt) })),
     mpesa: f.mpesa,
   };

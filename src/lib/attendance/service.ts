@@ -73,7 +73,7 @@ async function takeableStreams(tx: Tx, actor: Actor) {
       class: { level: { enabled: true } },
       ...(manage ? {} : { classTeacher: { userId: actor.userId, status: "active" } }),
     },
-    select: { id: true, name: true, class: { select: { name: true } } },
+    select: { id: true, name: true, class: { select: { name: true, levelId: true } } },
     orderBy: [
       { class: { level: { sortOrder: "asc" } } },
       { class: { position: "asc" } },
@@ -105,6 +105,7 @@ export async function myRegisters({ db }: Deps, actor: Actor, now = new Date()) 
       },
       select: { id: true, streamId: true, sessionId: true, submittedAt: true },
     });
+    const week = await settingsIn(tx, actor.schoolId);
     return {
       today,
       sessions: sessions.map((s) => ({
@@ -123,7 +124,7 @@ export async function myRegisters({ db }: Deps, actor: Actor, now = new Date()) 
           return {
             sessionId: se.id,
             submittedAt: r?.submittedAt ?? null,
-            overdue: !r && isSchoolDay(today) && minute > se.cutoffMinute,
+            overdue: !r && isSchoolDay(today, week, st.class.levelId) && minute > se.cutoffMinute,
           };
         }),
       })),
@@ -717,7 +718,7 @@ export async function attendanceToday({ db }: Deps, actor: Actor, now = new Date
         select: {
           id: true,
           name: true,
-          class: { select: { name: true } },
+          class: { select: { name: true, levelId: true } },
           classTeacher: { select: { displayName: true } },
         },
         orderBy: [
@@ -749,12 +750,15 @@ export async function attendanceToday({ db }: Deps, actor: Actor, now = new Date
     const current =
       opened.find((s) => registers.some((r) => r.sessionId === s.id)) ?? opened[0] ?? sessions[0];
     const currentIds = registers.filter((r) => r.sessionId === current?.id).map((r) => r.id);
-    const overdue = isSchoolDay(today)
+    const week = await settingsIn(tx, actor.schoolId);
+    const overdue = isSchoolDay(today, week)
       ? sessions.flatMap((se) =>
           minute > se.cutoffMinute
             ? streams
                 .filter(
-                  (st) => !registers.some((r) => r.streamId === st.id && r.sessionId === se.id),
+                  (st) =>
+                    isSchoolDay(today, week, st.class.levelId) &&
+                    !registers.some((r) => r.streamId === st.id && r.sessionId === se.id),
                 )
                 .map((st) => ({
                   streamId: st.id,
@@ -901,13 +905,15 @@ export async function attendanceReport(
         lates: sum.lates,
       };
     });
+    // The school week's days (Saturday too when any level has Saturday classes), Monday first.
+    const week = await settingsIn(tx, actor.schoolId);
     const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const latesByWeekday = weekdays
-      .map((d, i) => ({
-        day: d,
+    const latesByWeekday = [1, 2, 3, 4, 5, 6, 0]
+      .filter((i) => week.schoolDays.includes(i) || (i === 6 && week.saturdayLevelIds.length > 0))
+      .map((i) => ({
+        day: weekdays[i],
         lates: marks.filter((m) => m.status === "late" && m.date.getUTCDay() === i).length,
-      }))
-      .filter((d) => d.day !== "Sun" && d.day !== "Sat");
+      }));
     return {
       period,
       school: attendancePercent(marks.map((m) => m.status as MarkStatus)),

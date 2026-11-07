@@ -7,7 +7,8 @@ import { parseCard, verifyCard } from "@/lib/idcards/card-token";
 import { gateBundle } from "@/lib/leaveout/gate";
 import { adminCreditWallet } from "@/lib/messaging/wallet";
 import type { Actor } from "@/lib/service-kit";
-import { updateAbsenceSettings } from "@/lib/settings/service";
+import { childAttendance, childCurrentTerm } from "@/lib/portal/service";
+import { updateAbsenceSettings, updateSchoolWeek } from "@/lib/settings/service";
 import { saveStudentPhoto } from "@/lib/students/photos";
 import sharp from "sharp";
 import {
@@ -565,5 +566,102 @@ describe("school walls", () => {
     const sneaky = scopedDb(appUnguarded, { userId: B.director.user.id, schoolId: A.school.id });
     expect(await sneaky.attendanceMark.count()).toBe(0);
     expect(await sneaky.staffAttendance.count()).toBe(0);
+  });
+});
+
+describe("the school week", () => {
+  it("expects Saturday registers only from the levels with Saturday classes", async () => {
+    const f = await makeFixture("Week");
+    const g4 = await makeStream(f.school.id, "Grade 4", "North");
+    await makeStudent(f.school.id, g4.id, { firstName: "Tatu" });
+    await student(f, "Umi"); // Grade 7 East
+    const saturday = new Date("2026-11-14T09:00:00+03:00"); // after the 08:30 cut-off
+    // Default week (Monday to Friday): nothing is late on a Saturday.
+    expect((await attendanceToday(deps, f.principal.actor, saturday)).overdue).toEqual([]);
+    // Grade 7's level has Saturday classes; Grade 4's does not.
+    const g7Level = await owner.class.findFirstOrThrow({
+      where: { schoolId: f.school.id, name: "Grade 7" },
+    });
+    await updateSchoolWeek(deps, f.principal.actor, {
+      days: ["1", "2", "3", "4", "5"],
+      saturdayLevels: [g7Level.levelId],
+    });
+    const t = await attendanceToday(deps, f.principal.actor, saturday);
+    expect(t.overdue.map((o) => `${o.stream} ${o.session}`)).toEqual(["Grade 7 East Morning"]);
+    const mine = await myRegisters(deps, f.teacher.actor, saturday);
+    expect(mine.streams[0].registers[0].overdue).toBe(true);
+    // Only the Principal or Director sets it.
+    await expect(
+      updateSchoolWeek(deps, f.teacher.actor, { days: ["1"], saturdayLevels: [] }),
+    ).rejects.toThrow(ForbiddenError);
+    await expect(
+      updateSchoolWeek(deps, f.principal.actor, { days: [], saturdayLevels: [] }),
+    ).rejects.toThrow(/at least one/);
+  });
+});
+
+describe("the parent portal", () => {
+  it("shows attendance for the current term, through the parent's own link", async () => {
+    const f = await makeFixture("Portal term");
+    await owner.school.update({
+      where: { id: f.school.id },
+      data: { modules: ["boarding", "attendance"] },
+    });
+    const s = await student(f, "Wema");
+    const parent = await owner.guardianLink.findFirstOrThrow({
+      where: { schoolId: f.school.id, studentId: s.id },
+    });
+    const today = nairobiDate(new Date());
+    const year = await owner.academicYear.create({
+      data: {
+        schoolId: f.school.id,
+        name: "2026",
+        startDate: new Date(today.getTime() - 200 * 86_400_000),
+        endDate: new Date(today.getTime() + 100 * 86_400_000),
+      },
+    });
+    await owner.term.create({
+      data: {
+        schoolId: f.school.id,
+        academicYearId: year.id,
+        name: "Term 3",
+        startDate: new Date(today.getTime() - 50 * 86_400_000),
+        endDate: new Date(today.getTime() + 20 * 86_400_000),
+      },
+    });
+    // Absent six weeks ago (inside the term, outside "the last four weeks"); present today.
+    const sixWeeksAgo = new Date(Date.now() - 42 * 86_400_000);
+    await submitRegister(
+      deps,
+      f.principal.actor,
+      { ...key(f), date: nairobiDate(sixWeeksAgo), absent: [s.id], late: [] },
+      sixWeeksAgo,
+    );
+    await submitRegister(deps, f.teacher.actor, { ...key(f), date: today, absent: [], late: [] });
+    const a = (await childAttendance({ db: app }, parent.userId, parent.id))!;
+    expect(a.term).toMatchObject({ name: "Term 3", year: "2026" });
+    expect(a.period.label).toBe("Term 3 2026");
+    expect(a).toMatchObject({ daysAbsent: 1, percent: 50 });
+    // Someone else's link shows nothing.
+    const stranger = await owner.user.create({ data: { phone: randomPhone(), name: "X" } });
+    expect(await childCurrentTerm({ db: app }, stranger.id, parent.id)).toBeNull();
+  });
+});
+
+describe("ID cards at the gate, offline", () => {
+  it("the gate's bundle has each live card's student, and replaced cards with no name", async () => {
+    const f = await makeFixture("Cards offline");
+    const s = await student(f, "Zuri", true);
+    const { cards } = await cardsForPrint(deps, f.secretary.actor, { studentIds: [s.id] });
+    await reissueCard(deps, f.secretary.actor, s.id, "Lost");
+    const bundle = await gateBundle(deps, f.guard.actor);
+    const old = bundle.cards.find((c) => c.id === cards[0].cardId)!;
+    expect(old).toMatchObject({ live: false, name: null, classLabel: null });
+    const fresh = bundle.cards.find((c) => c.live && c.studentId === s.id)!;
+    expect(fresh).toMatchObject({ name: "Zuri Otieno", classLabel: "Grade 7 East", boarder: true });
+    // Another school's guard gets none of them.
+    expect((await gateBundle(deps, B.guard.actor)).cards.some((c) => c.studentId === s.id)).toBe(
+      false,
+    );
   });
 });

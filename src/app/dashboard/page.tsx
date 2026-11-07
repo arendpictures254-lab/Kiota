@@ -18,6 +18,8 @@ import { myStaffDay } from "@/lib/attendance/staff";
 import { dashboardOverview } from "@/lib/dashboard/service";
 import { BoardersToCheck, RegistersToTake, StaffDayCard } from "./attendance-cards";
 import { AttendanceGlance } from "./attendance/widgets";
+import { StoresWidget } from "./stores/widget";
+import { canSeeStoreReports, ensureDailyDigest, storesWidget } from "@/lib/stores/reports";
 import { db } from "@/lib/db";
 import { kes, receiptNo } from "@/lib/fees/allocation";
 import { whenText } from "@/lib/leaveout/rules";
@@ -137,7 +139,10 @@ async function Dashboard() {
   const supportOn = ctx.school.supportAccessUntil && ctx.school.supportAccessUntil > new Date();
   // Row-level security only returns this person's own notifications.
   const p = ctx.permissions;
-  const [notifications, o, staffDay, registers, today, boarders] = await Promise.all([
+  // The stores' daily digest (low stock, expiring soon) is made on the first visit of the day.
+  if (p.has("stores.setup")) await ensureDailyDigest(deps, actor).catch(() => false);
+  const showStores = canSeeStoreReports(p) || p.has("stores.setup");
+  const [notifications, o, staffDay, registers, today, boarders, stores] = await Promise.all([
     db(ctx.dbContext).notification.findMany({
       where: { schoolId: ctx.school.id, readAt: null },
       orderBy: { createdAt: "desc" },
@@ -148,6 +153,7 @@ async function Dashboard() {
     canTakeAttendance(p) && !canManageAttendance(p) ? myRegisters(deps, actor) : null,
     canManageAttendance(p) ? attendanceToday(deps, actor) : null,
     canHandleBoarderAlerts(p) && !canManageAttendance(p) ? boarderAlerts(deps, actor) : null,
+    showStores ? storesWidget(deps, actor) : null,
   ]);
 
   const collectedPct =
@@ -239,7 +245,21 @@ async function Dashboard() {
         ) : null}
       </section>
 
-      {today ? <AttendanceGlance t={today} compact /> : null}
+      {today || stores ? (
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+          {today ? <AttendanceGlance t={today} compact /> : null}
+          {stores ? <StoresWidget w={stores} showCost={canSeeStoreReports(p)} /> : null}
+        </div>
+      ) : null}
+      {p.has("kitchen.confirm") && !p.has("stores.issue") ? (
+        <Link
+          href="/dashboard/stores/kitchen"
+          className="flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-teal px-5 font-semibold text-white"
+        >
+          <span>Today&apos;s meals from the store</span>
+          <span aria-hidden>→</span>
+        </Link>
+      ) : null}
 
       {/* What is happening: side by side on a computer */}
       {o.payments || o.waiting || o.notices ? (

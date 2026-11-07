@@ -470,6 +470,7 @@ model Student {
   attendanceMarks AttendanceMark[]
   absenceAlerts   AbsenceAlert[]
   cards           StudentCard[]
+  uniformIssues   UniformIssue[]
   guardians       GuardianLink[]
   subjects        StudentSubject[]
   documents       StudentDocument[]
@@ -1400,6 +1401,15 @@ model SchoolSettings {
   /// Also SMS a boarder's parents straight away (normally only when the boarding staff mark
   /// the child "not found").
   absenceSmsBoarders       Boolean  @default(false) @map("absence_sms_boarders")
+  /// The school week: days registers are expected (0 = Sunday ... 6 = Saturday).
+  schoolDays               Int[]    @default([1, 2, 3, 4, 5]) @map("school_days")
+  /// Levels that also have Saturday classes (e.g. senior school only), when Saturday is not a
+  /// school day for everyone.
+  saturdayLevelIds         String[] @default([]) @map("saturday_level_ids") @db.Uuid
+  /// Stores: flag a meal issue that differs from the ration scale by more than this percentage.
+  mealVariancePercent      Int      @default(10) @map("meal_variance_percent")
+  /// Stores: the vote head uniform issues are charged to (the "Uniform" vote head if not set).
+  uniformVoteHeadId        String?  @map("uniform_vote_head_id") @db.Uuid
   /// The back of the student ID card: the school's phone, email and address.
   cardPhone                String?  @map("card_phone")
   cardEmail                String?  @map("card_email")
@@ -1546,4 +1556,264 @@ model StudentCard {
   @@unique([schoolId, id])
   @@index([schoolId, studentId])
   @@map("student_cards")
+}
+
+// ---------------------------------------------------------------------------
+// Stores and inventory. Quantities are integers in thousandths of the item's base unit
+// ("_milli": 150 g of a kg item = 150; 2 pieces = 2000), values are integer cents. Stock on hand
+// is always the sum of the append-only movements, never typed in.
+// ---------------------------------------------------------------------------
+
+/// A store (Food store, Uniform store, General store, Stationery... the school adds more).
+model Store {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  /// food, uniform, general, stationery or other: which screens apply (meals, uniforms).
+  kind      String
+  position  Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  items     StoreItem[]
+  movements StockMovement[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("stores")
+}
+
+/// An item in a store, counted in a base unit (kg, litre, piece, packet...). Uniforms: one item per
+/// size, with a price.
+model StoreItem {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  storeId           String   @map("store_id") @db.Uuid
+  name              String
+  /// For uniforms: the size ("Size 12", "M"); empty otherwise.
+  size              String   @default("")
+  /// The base unit stock is issued and counted in.
+  unit              String
+  /// Shelf or category, for grouping the stock-take list.
+  category          String   @default("")
+  reorderLevelMilli Int      @default(0) @map("reorder_level_milli")
+  /// Received in packs: "90 kg bag" holding pack_size_milli of the base unit.
+  packName          String?  @map("pack_name")
+  packSizeMilli     Int?     @map("pack_size_milli")
+  tracksExpiry      Boolean  @default(false) @map("tracks_expiry")
+  /// Uniforms: what the student is charged for one piece.
+  priceCents        Int?     @map("price_cents")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  store     Store           @relation(fields: [schoolId, storeId], references: [schoolId, id], onDelete: Restrict)
+  movements StockMovement[]
+
+  @@unique([schoolId, storeId, name, size])
+  @@unique([schoolId, id])
+  @@map("store_items")
+}
+
+model Supplier {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  phone     String?
+  kraPin    String?  @map("kra_pin")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("suppliers")
+}
+
+/// The stock ledger (append-only). quantity_milli is signed: received +, issued -. value_cents is
+/// signed the same way: a receipt's cost, or an issue valued at weighted average cost.
+model StockMovement {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  storeId        String    @map("store_id") @db.Uuid
+  itemId         String    @map("item_id") @db.Uuid
+  /// receive, issue, meal, transfer_out, transfer_in, adjust, stocktake, uniform_issue, uniform_return
+  kind           String
+  quantityMilli  Int       @map("quantity_milli")
+  valueCents     Int       @map("value_cents")
+  occurredOn     DateTime  @map("occurred_on") @db.Date
+  supplierId     String?   @map("supplier_id") @db.Uuid
+  deliveryNote   String?   @map("delivery_note")
+  /// Received in packs: how many, and the pack size then (for the record).
+  packs          Int?
+  packSizeMilli  Int?      @map("pack_size_milli")
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  mealIssueId    String?   @map("meal_issue_id") @db.Uuid
+  uniformIssueId String?   @map("uniform_issue_id") @db.Uuid
+  stocktakeId    String?   @map("stocktake_id") @db.Uuid
+  /// Links the two halves of a transfer.
+  transferId     String?   @map("transfer_id") @db.Uuid
+  /// Who it was issued to or what for ("Kitchen", "Science lab").
+  issuedTo       String?   @map("issued_to")
+  reason         String?
+  createdById    String    @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  store Store     @relation(fields: [schoolId, storeId], references: [schoolId, id], onDelete: Restrict)
+  item  StoreItem @relation(fields: [schoolId, itemId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId, itemId, occurredOn])
+  @@index([schoolId, storeId, occurredOn])
+  @@index([schoolId, mealIssueId])
+  @@map("stock_movements")
+}
+
+/// The meals a school serves (configuration: Breakfast, Lunch, Supper, 10 o'clock tea...).
+model Meal {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String  @map("school_id") @db.Uuid
+  name     String
+  position Int
+  active   Boolean @default(true)
+
+  rations RationLine[]
+  issues  MealIssue[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("meals")
+}
+
+/// The ration scale: how much of an item one student gets at a meal.
+model RationLine {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String @map("school_id") @db.Uuid
+  mealId          String @map("meal_id") @db.Uuid
+  itemId          String @map("item_id") @db.Uuid
+  perStudentMilli Int    @map("per_student_milli")
+
+  meal Meal @relation(fields: [schoolId, mealId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, mealId, itemId])
+  @@map("ration_lines")
+}
+
+/// One meal's issue from the food store: students served, what the ration scale suggested and
+/// what was actually issued (the lines are stock movements). Flagged when off by more than the
+/// school's variance percentage.
+model MealIssue {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String    @map("school_id") @db.Uuid
+  storeId          String    @map("store_id") @db.Uuid
+  mealId           String    @map("meal_id") @db.Uuid
+  date             DateTime  @db.Date
+  studentsServed   Int       @map("students_served")
+  costCents        Int       @map("cost_cents")
+  issuedById       String    @map("issued_by_id") @db.Uuid
+  /// The cook confirms how many were actually served.
+  servedConfirmed  Int?      @map("served_confirmed")
+  confirmedById    String?   @map("confirmed_by_id") @db.Uuid
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  /// The largest difference from the ration scale, in tenths of a percent (125 = 12.5%).
+  variancePermille Int       @default(0) @map("variance_permille")
+  /// none, open (flagged, waiting for the Director), reviewed.
+  varianceStatus   String    @default("none") @map("variance_status")
+  reviewedById     String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewNote       String?   @map("review_note")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  meal  Meal            @relation(fields: [schoolId, mealId], references: [schoolId, id], onDelete: Restrict)
+  lines MealIssueLine[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId, date])
+  @@map("meal_issues")
+}
+
+model MealIssueLine {
+  id               String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String @map("school_id") @db.Uuid
+  mealIssueId      String @map("meal_issue_id") @db.Uuid
+  itemId           String @map("item_id") @db.Uuid
+  suggestedMilli   Int    @map("suggested_milli")
+  actualMilli      Int    @map("actual_milli")
+  costCents        Int    @map("cost_cents")
+  /// (actual - suggested) / suggested, tenths of a percent; null when nothing was suggested.
+  variancePermille Int?   @map("variance_permille")
+
+  issue MealIssue @relation(fields: [schoolId, mealIssueId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, mealIssueId, itemId])
+  @@map("meal_issue_lines")
+}
+
+/// A uniform piece given to a student: charged to their fees (a ledger charge on the Uniform vote
+/// head), or paid separately. Returned or exchanged: the stock comes back and the charge is
+/// reversed through the fees module.
+model UniformIssue {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  studentId       String    @map("student_id") @db.Uuid
+  itemId          String    @map("item_id") @db.Uuid
+  quantity        Int
+  unitPriceCents  Int       @map("unit_price_cents")
+  totalCents      Int       @map("total_cents")
+  /// charged or paid_separately
+  payment         String
+  paidReference   String?   @map("paid_reference")
+  ledgerEntryId   String?   @map("ledger_entry_id") @db.Uuid
+  issuedById      String    @map("issued_by_id") @db.Uuid
+  issuedAt        DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  /// issued, returned
+  status          String    @default("issued")
+  returnedAt      DateTime? @map("returned_at") @db.Timestamptz(3)
+  returnedById    String?   @map("returned_by_id") @db.Uuid
+  returnReason    String?   @map("return_reason")
+  /// An exchange: the issue that replaced this one.
+  replacedById    String?   @map("replaced_by_id") @db.Uuid
+  reversalEntryId String?   @map("reversal_entry_id") @db.Uuid
+
+  student Student @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, id])
+  @@index([schoolId, studentId])
+  @@map("uniform_issues")
+}
+
+/// A stock-take: counted on a phone, submitted, then approved (only approval changes stock).
+model Stocktake {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String    @map("school_id") @db.Uuid
+  storeId       String    @map("store_id") @db.Uuid
+  /// counting, submitted, approved, rejected
+  status        String
+  startedById   String    @map("started_by_id") @db.Uuid
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  submittedById String?   @map("submitted_by_id") @db.Uuid
+  submittedAt   DateTime? @map("submitted_at") @db.Timestamptz(3)
+  decidedById   String?   @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime? @map("decided_at") @db.Timestamptz(3)
+  note          String?
+
+  lines StocktakeLine[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId, storeId])
+  @@map("stocktakes")
+}
+
+model StocktakeLine {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String @map("school_id") @db.Uuid
+  stocktakeId   String @map("stocktake_id") @db.Uuid
+  itemId        String @map("item_id") @db.Uuid
+  /// What the records said when the count was submitted.
+  expectedMilli Int?   @map("expected_milli")
+  countedMilli  Int?   @map("counted_milli")
+  /// The difference's value at weighted average cost when submitted (signed).
+  valueCents    Int?   @map("value_cents")
+
+  stocktake Stocktake @relation(fields: [schoolId, stocktakeId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, stocktakeId, itemId])
+  @@map("stocktake_lines")
 }

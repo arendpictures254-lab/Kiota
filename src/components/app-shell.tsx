@@ -17,6 +17,7 @@ import { db } from "@/lib/db";
 import { canHandleBoarderAlerts, canTakeAttendance } from "@/lib/attendance/service";
 import { canSeeLeaveouts } from "@/lib/leaveout/service";
 import { canSeeMessages } from "@/lib/messaging/service";
+import { canSeeKitchen, canSeeStores } from "@/lib/stores/service";
 import { SidebarNav, TabBar, type NavItem } from "./app-nav";
 
 export type PageWidth = "wide" | "form" | "reading";
@@ -51,6 +52,9 @@ export function schoolNavItems(p: Perms): NavItem[] {
     items.push({ href: "/dashboard/leaveouts", label: "Leave-outs", icon: "leaveouts" });
   if (canSeeMessages(p))
     items.push({ href: "/dashboard/messages", label: "Messages", icon: "messages" });
+  if (canSeeStores(p)) items.push({ href: "/dashboard/stores", label: "Stores", icon: "stores" });
+  else if (canSeeKitchen(p))
+    items.push({ href: "/dashboard/stores/kitchen", label: "Kitchen", icon: "kitchen" });
   if (p.has("gate.scan")) items.push({ href: "/gate", label: "Gate", icon: "gate" });
   if (p.has("staff.view")) items.push({ href: "/dashboard/staff", label: "Staff", icon: "staff" });
   if (p.has("structure.manage"))

@@ -35,7 +35,8 @@ async function Attendance({ params }: Pick<PageProps<"/parent/[linkId]/attendanc
       back={{ href: `/parent/${linkId}`, label: child.firstName }}
     >
       <p className="-mt-3 text-sm text-ink/60">
-        {child.schoolName} · {t("att.period")}
+        {child.schoolName} ·{" "}
+        {a.term ? t("att.thisTerm", { term: `${a.term.name} ${a.term.year}` }) : t("att.period")}
       </p>
       <dl className="grid grid-cols-3 gap-2 text-center">
         {(

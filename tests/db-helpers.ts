@@ -13,8 +13,14 @@ export const app = createAppClient();
  */
 export const appUnguarded = createClient(process.env.APP_DATABASE_URL);
 
+/**
+ * A phone number no other test user has: a random starting point for this test file, then one
+ * up each time. (Purely random numbers collided now and then once the test database had tens of
+ * thousands of users: "Unique constraint failed on users_phone_key".)
+ */
+let nextPhone = randomInt(10_000_000, 90_000_000);
 export function randomPhone(): string {
-  return `+2547${randomInt(10_000_000, 99_999_999)}`;
+  return `+2547${nextPhone++}`;
 }
 
 /** A school with the Kenyan level templates copied in; `levels` are switched on. */

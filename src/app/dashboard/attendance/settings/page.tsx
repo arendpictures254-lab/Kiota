@@ -5,7 +5,9 @@ import { Card, Field, Loading, Notice } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { canManageAttendance } from "@/lib/attendance/service";
 import { attendanceSessions, clock, getSchoolSettings } from "@/lib/settings/service";
-import { absenceSettingsAction, sessionAction } from "../actions";
+import { absenceSettingsAction, schoolWeekAction, sessionAction } from "../actions";
+import { WEEKDAY_NAMES } from "@/lib/attendance/rules";
+import { getStructure } from "@/lib/structure/service";
 import { AttendanceShell, loadAttendanceActor } from "../shared";
 
 export const metadata: Metadata = { title: "Register times and alerts · Kiota" };
@@ -46,10 +48,12 @@ async function Settings() {
   const { actor } = await loadAttendanceActor();
   if (!canManageAttendance(actor.permissions))
     return <Notice tone="error">For the Principal and Director.</Notice>;
-  const [s, sessions] = await Promise.all([
+  const [s, sessions, structure] = await Promise.all([
     getSchoolSettings(deps, actor),
     attendanceSessions(deps, actor, true),
+    getStructure(deps, actor),
   ]);
+  const levels = structure.levels.filter((l) => l.enabled);
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
@@ -79,10 +83,60 @@ async function Settings() {
       </section>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-section font-bold">School week</h2>
+        <ActionForm action={schoolWeekAction} submitLabel="Save">
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-sm font-semibold">Registers are taken on</legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                <label
+                  key={d}
+                  className="flex min-h-11 items-center gap-2 rounded-xl border border-ink/10 px-3"
+                >
+                  <input
+                    type="checkbox"
+                    name="days"
+                    value={d}
+                    defaultChecked={s.schoolDays.includes(d)}
+                    className="size-5 accent-teal"
+                  />
+                  {WEEKDAY_NAMES[d]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {levels.length ? (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-2 text-sm font-semibold">
+                Saturday classes only for (when Saturday is not ticked above)
+              </legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {levels.map((l) => (
+                  <label
+                    key={l.id}
+                    className="flex min-h-11 items-center gap-2 rounded-xl border border-ink/10 px-3"
+                  >
+                    <input
+                      type="checkbox"
+                      name="saturdayLevels"
+                      value={l.id}
+                      defaultChecked={s.saturdayLevelIds.includes(l.id)}
+                      className="size-5 accent-teal"
+                    />
+                    {l.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+        </ActionForm>
+      </section>
+
+      <section className="flex flex-col gap-3">
         <h2 className="font-heading text-section font-bold">Register times</h2>
         <p className="text-sm text-ink/70">
           Registers not submitted by the cut-off show on the Principal&apos;s and Director&apos;s
-          dashboards (Monday to Friday).
+          dashboards, on school days.
         </p>
         {sessions.map((se) => (
           <Card key={se.id} className="p-3">

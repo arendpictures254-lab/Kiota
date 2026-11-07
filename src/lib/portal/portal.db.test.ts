@@ -263,7 +263,7 @@ describe("one family, many schools", () => {
     await postEntry(owner as unknown as Tx, {
       schoolId: A.school.id,
       studentId: a.student.id,
-      type: "charge",
+      type: "opening_balance",
       description: "Balance from before Kiota",
       createdById: A.bursar.userId,
       lines: [{ voteHeadId: null, amountCents: 300_000 }],

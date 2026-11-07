@@ -46,8 +46,32 @@ export function parseDay(s: string | null | undefined): Date | null {
 
 export const sameDay = (a: Date, b: Date) => isoDay(a) === isoDay(b);
 
-/** Registers are expected Monday to Friday. */
-export const isSchoolDay = (day: Date) => day.getUTCDay() >= 1 && day.getUTCDay() <= 5;
+/** The school week (a school setting): weekdays for everyone, and Saturday for some levels. */
+export type SchoolWeek = { schoolDays: number[]; saturdayLevelIds: string[] };
+
+export const DEFAULT_WEEK: SchoolWeek = { schoolDays: [1, 2, 3, 4, 5], saturdayLevelIds: [] };
+
+/**
+ * Whether registers are expected on this day (0 = Sunday ... 6 = Saturday): a school day for
+ * everyone, or a Saturday for a level that has Saturday classes. Without a level: whether
+ * anyone has school that day (staff attendance, the school's own reports).
+ */
+export function isSchoolDay(day: Date, week: SchoolWeek = DEFAULT_WEEK, levelId?: string | null) {
+  const dow = day.getUTCDay();
+  if (week.schoolDays.includes(dow)) return true;
+  if (dow !== 6 || week.saturdayLevelIds.length === 0) return false;
+  return levelId === undefined || levelId === null ? true : week.saturdayLevelIds.includes(levelId);
+}
+
+export const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 /**
  * Who may change a register that was already submitted:

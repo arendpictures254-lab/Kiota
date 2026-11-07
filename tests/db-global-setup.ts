@@ -1,6 +1,8 @@
 /**
- * Prepares the `kiota_test` database for the "db" Vitest project: creates it if needed,
- * applies migrations as the owner, syncs the permission catalogue and enables kiota_app.
+ * Prepares the `kiota_test` database for the "db" Vitest project: makes it again from empty
+ * on every run (tests never depend on what an earlier run left behind, and leftovers made random
+ * test data collide), applies migrations as the owner, syncs the permission catalogue and enables
+ * kiota_app.
  */
 import { execSync } from "node:child_process";
 import type { TestProject } from "vitest/node";
@@ -20,10 +22,8 @@ export default async function setup(project: TestProject) {
   adminUrl.pathname = "/postgres";
   const admin = createClient(adminUrl.toString());
   try {
-    const exists = await admin.$queryRaw<
-      unknown[]
-    >`SELECT 1 FROM pg_database WHERE datname = ${dbName}`;
-    if (exists.length === 0) await admin.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
+    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
   } finally {
     await admin.$disconnect();
   }

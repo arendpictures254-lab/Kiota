@@ -157,8 +157,9 @@ Details: docs/attendance.md.
 - [ ] **Class teachers set for every stream** (School setup → Classes): only a stream's class
       teacher (or the Principal and Director) can take its register.
 - [ ] **Register times and cut-offs agreed** (Attendance → Register times and alerts): Morning
-      07:30, cut-off 08:30 and Afternoon 14:00, cut-off 14:30 by default. Registers are expected
-      Monday to Friday; decide what happens on Saturday classes (not handled yet).
+      07:30, cut-off 08:30 and Afternoon 14:00, cut-off 14:30 by default.
+- [ ] **The school week set** (same page): Monday to Friday by default; tick Saturday for
+      everyone, or Saturday classes for some levels only (e.g. senior school).
 - [ ] **Absence SMS agreed with the school**: day scholars' parents get an SMS 30 minutes after
       the register (default); boarders' parents only when the boarding staff mark the child "not
       found" (urgent). Native-speaker check of the Kiswahili wording (`attendance_*` templates).
@@ -174,6 +175,22 @@ Details: docs/attendance.md.
 - [ ] **The school's contacts on the back of the card** (ID cards page) and the crest uploaded.
 - [ ] **Switch on "Attendance in the parent portal"** for the school (Arend admin → modules) when
       the school is ready for parents to see it.
+
+## Stores
+
+Details: docs/stores.md.
+
+- [ ] **Opening stock count**: before go-live, count every store and enter the opening stock as a
+      delivery at its real cost (or the last purchase price) so averages start right.
+- [ ] **Items, units and pack sizes agreed with the storekeeper** (a "bag" of maize is 90 kg here?
+      a carton of tea 5 kg?), and reorder levels set.
+- [ ] **Ration scale agreed with the cook and Director** per meal, and the variance threshold
+      (10% by default). Expect a few weeks of tuning before flags mean something.
+- [ ] **Uniform prices and the vote head** uniforms are charged to (Stores → Setup), agreed with
+      the Bursar; check one charge and one return on a real student's statement.
+- [ ] **Monthly stock-take** routine agreed (who counts, who approves).
+- [ ] **Saturday meals**: registers follow the school week, but meal issues can be recorded any
+      day; check weekend boarders' numbers are right.
 
 ## Public website
 

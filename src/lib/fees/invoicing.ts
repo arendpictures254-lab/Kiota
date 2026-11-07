@@ -22,6 +22,7 @@ import {
   applyAvailableCredit,
   postEntries,
   postEntry,
+  rebalanceAfterReversal,
   studentPositions,
   voteHeadRefs,
 } from "./ledger";
@@ -461,28 +462,109 @@ export async function addCharge(
       where: { schoolId: actor.schoolId, id: String(raw.voteHeadId ?? "") },
     });
     if (!vh) throw new ValidationError("Choose the vote head.", "voteHeadId");
-    const termId = clean(raw.termId);
-    const entry = await postEntry(tx, {
-      schoolId: actor.schoolId,
+    await postCharge(tx, actor, {
       studentId: student.id,
-      type: "charge",
-      termId,
+      voteHeadId: vh.id,
+      voteHeadName: vh.name,
+      amountCents: amount.cents!,
       description,
-      createdById: actor.userId,
-      lines: [{ voteHeadId: vh.id, amountCents: amount.cents! }],
-    });
-    await applyAvailableCredit(tx, { schoolId: actor.schoolId, userId: actor.userId }, student.id);
-    await audit(tx, {
-      schoolId: actor.schoolId,
-      actorId: actor.userId,
-      action: "fees.charge",
-      targetType: "student",
-      targetId: student.id,
-      after: { description, amountCents: amount.cents, voteHead: vh.name, entryId: entry.id },
-      ip: actor.ip,
+      termId: clean(raw.termId),
     });
     return { studentId: student.id };
   });
+}
+
+/**
+ * The one way a one-off charge reaches a student's ledger (the fees screen, and uniforms from the
+ * stores): an append-only "charge" entry on one vote head, available credit applied, audited.
+ * Runs in the caller's transaction; the caller has checked who may charge.
+ */
+export async function postCharge(
+  tx: Tx,
+  actor: Pick<Actor, "schoolId" | "userId" | "ip">,
+  c: {
+    studentId: string;
+    voteHeadId: string;
+    voteHeadName: string;
+    amountCents: number;
+    description: string;
+    termId?: string | null;
+  },
+) {
+  if (!Number.isInteger(c.amountCents) || c.amountCents <= 0)
+    throw new ValidationError("A charge must be a positive amount.");
+  const entry = await postEntry(tx, {
+    schoolId: actor.schoolId,
+    studentId: c.studentId,
+    type: "charge",
+    termId: c.termId ?? null,
+    description: c.description,
+    createdById: actor.userId,
+    lines: [{ voteHeadId: c.voteHeadId, amountCents: c.amountCents }],
+  });
+  await applyAvailableCredit(tx, { schoolId: actor.schoolId, userId: actor.userId }, c.studentId);
+  await audit(tx, {
+    schoolId: actor.schoolId,
+    actorId: actor.userId,
+    action: "fees.charge",
+    targetType: "student",
+    targetId: c.studentId,
+    after: {
+      description: c.description,
+      amountCents: c.amountCents,
+      voteHead: c.voteHeadName,
+      entryId: entry.id,
+    },
+    ip: actor.ip,
+  });
+  return entry;
+}
+
+/**
+ * Reverse a charge (never edit it): a "reversal" entry with the opposite lines, pointing at the
+ * charge, then any credit moved back and re-applied, as for payment reversals. A charge is only
+ * ever reversed once.
+ */
+export async function reverseCharge(
+  tx: Tx,
+  actor: Pick<Actor, "schoolId" | "userId" | "ip">,
+  entryId: string,
+  reason: string,
+) {
+  const original = await tx.ledgerEntry.findFirst({
+    where: { schoolId: actor.schoolId, id: entryId, type: "charge" },
+    include: { lines: true },
+  });
+  if (!original) throw new ValidationError("Charge not found.");
+  const already = await tx.ledgerEntry.findFirst({
+    where: { schoolId: actor.schoolId, reversesEntryId: original.id },
+    select: { id: true },
+  });
+  if (already) throw new ValidationError("This charge has already been reversed.");
+  const entry = await postEntry(tx, {
+    schoolId: actor.schoolId,
+    studentId: original.studentId,
+    type: "reversal",
+    termId: original.termId,
+    description: `Reversal of "${original.description}": ${reason}`,
+    createdById: actor.userId,
+    reversesEntryId: original.id,
+    lines: original.lines.map((l) => ({ voteHeadId: l.voteHeadId, amountCents: -l.amountCents })),
+  });
+  const ctx = { schoolId: actor.schoolId, userId: actor.userId };
+  await rebalanceAfterReversal(tx, ctx, original.studentId);
+  await applyAvailableCredit(tx, ctx, original.studentId);
+  await audit(tx, {
+    schoolId: actor.schoolId,
+    actorId: actor.userId,
+    action: "fees.charge_reverse",
+    targetType: "student",
+    targetId: original.studentId,
+    before: { entryId: original.id, amountCents: original.amountCents },
+    after: { reversalEntryId: entry.id, reason },
+    ip: actor.ip,
+  });
+  return entry;
 }
 
 export type { VoteHeadRef };

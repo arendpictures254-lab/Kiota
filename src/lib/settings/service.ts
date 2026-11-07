@@ -19,6 +19,8 @@ export type SchoolSettingsRow = {
   cardPhone: string | null;
   cardEmail: string | null;
   cardAddress: string | null;
+  schoolDays: number[];
+  saturdayLevelIds: string[];
 };
 
 const DEFAULTS: SchoolSettingsRow = {
@@ -29,6 +31,8 @@ const DEFAULTS: SchoolSettingsRow = {
   cardPhone: null,
   cardEmail: null,
   cardAddress: null,
+  schoolDays: [1, 2, 3, 4, 5],
+  saturdayLevelIds: [],
 };
 
 /** The school's settings, inside a transaction already in the school's context. */
@@ -104,6 +108,46 @@ export async function updateAbsenceSettings(
         absenceSmsBoarders: before.absenceSmsBoarders,
       },
       after: data,
+      ip: actor.ip,
+    });
+  });
+}
+
+/**
+ * The school week (Principal, Director): the days registers are expected, and the levels that
+ * also have Saturday classes. Registers, cut-off alerts and reports follow it.
+ */
+export async function updateSchoolWeek(
+  { db }: Deps,
+  actor: Actor,
+  input: { days: unknown[]; saturdayLevels: unknown[] },
+) {
+  assertCan(actor.permissions, "attendance.manage");
+  const schoolDays = [...new Set(input.days.map(Number))]
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    .sort();
+  if (schoolDays.length === 0) throw new ValidationError("Choose at least one school day.", "days");
+  const wanted = input.saturdayLevels.map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+  await withContext(db, ctxOf(actor), async (tx) => {
+    const levels = await tx.level.findMany({
+      where: { schoolId: actor.schoolId, id: { in: wanted } },
+      select: { id: true },
+    });
+    // Saturday for everyone makes a per-level Saturday pointless.
+    const saturdayLevelIds = schoolDays.includes(6) ? [] : levels.map((l) => l.id);
+    const before = await settingsIn(tx, actor.schoolId);
+    await tx.schoolSettings.update({
+      where: { schoolId: actor.schoolId },
+      data: { schoolDays, saturdayLevelIds },
+    });
+    await audit(tx, {
+      schoolId: actor.schoolId,
+      actorId: actor.userId,
+      action: "settings.school_week",
+      targetType: "school",
+      targetId: actor.schoolId,
+      before: { schoolDays: before.schoolDays, saturdayLevelIds: before.saturdayLevelIds },
+      after: { schoolDays, saturdayLevelIds },
       ip: actor.ip,
     });
   });

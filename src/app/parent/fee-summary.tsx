@@ -45,6 +45,11 @@ export function FeeSummary({
               {t("fees.includesArrears", { amount: money(fees.arrearsCents) })}
             </p>
           ) : null}
+          {fees.chargesCents > 0 ? (
+            <p className="text-sm text-ink/70">
+              {t("fees.includesCharges", { amount: money(fees.chargesCents) })}
+            </p>
+          ) : null}
           {fees.missedSince ? (
             <p className="text-sm font-semibold text-status-overdue">
               {t("fees.missedDate", { date: day(fees.missedSince, locale) })}

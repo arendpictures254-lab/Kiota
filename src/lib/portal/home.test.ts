@@ -35,11 +35,35 @@ describe("what a parent is asked to pay", () => {
     ],
   };
 
+  it("a one-off charge since the invoice (a uniform) is due now, and is not called arrears", () => {
+    const r = splitBalance(
+      4_000_000 + 130_000,
+      invoice,
+      new Date("2027-01-02T09:00:00+03:00"),
+      130_000,
+    );
+    expect(r).toMatchObject({
+      dueNowCents: 130_000,
+      chargesCents: 130_000,
+      arrearsCents: 0,
+      restOfYearCents: 4_000_000,
+    });
+    // Paid down to less than the charge: only what is left of it is due.
+    expect(
+      splitBalance(50_000, invoice, new Date("2027-01-02T09:00:00+03:00"), 130_000),
+    ).toMatchObject({
+      dueNowCents: 50_000,
+      chargesCents: 50_000,
+      restOfYearCents: 0,
+    });
+  });
+
   it("before the first date: nothing due now, the rest of the year with the next date", () => {
     expect(splitBalance(4_000_000, invoice, new Date("2027-01-02T09:00:00+03:00"))).toEqual({
       dueNowCents: 0,
       restOfYearCents: 4_000_000,
       arrearsCents: 0,
+      chargesCents: 0,
       nextDue: { date: invoice.installments[0].dueDate, amountCents: 2_000_000 },
     });
   });
@@ -50,6 +74,7 @@ describe("what a parent is asked to pay", () => {
       dueNowCents: 2_000_000,
       restOfYearCents: 2_000_000,
       arrearsCents: 0,
+      chargesCents: 0,
       nextDue: { amountCents: 1_200_000 },
     });
   });
@@ -78,6 +103,7 @@ describe("what a parent is asked to pay", () => {
       dueNowCents: 0,
       restOfYearCents: 0,
       arrearsCents: 0,
+      chargesCents: 0,
       nextDue: null,
     });
   });

@@ -9,7 +9,7 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "next typegen && node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

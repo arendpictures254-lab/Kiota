@@ -43,6 +43,8 @@ You can type them as `0711 000 001` or `+254711000001`.
 | 0711 000 008 | Lucy Wambui            | Bahari Academy | School secretary: photos and ID cards    |
 | 0711 000 009 | Daniel Ochieng         | Bahari Academy | Class teacher, Grade 7 West              |
 | 0711 000 010 | Ruth Njoroge           | Bahari Academy | Class teacher, Grade 8 East              |
+| 0711 000 011 | Omar Hassan            | Bahari Academy | Storekeeper                              |
+| 0711 000 012 | Esther Achieng         | Bahari Academy | Cook: today's meals, number served       |
 | 0722 000 001 | John Kamau             | Milima School  | Director                                 |
 | 0722 000 002 | Mary Achieng           | Milima School  | Bursar                                   |
 | 0722 000 003 | David Kiprono          | Milima School  | Class teacher                            |
@@ -99,6 +101,31 @@ and a few students who owe everything.
 
   The payment appears under Fees → Payments with a receipt. See [docs/mpesa.md](docs/mpesa.md)
   for every command and for testing against the real Daraja sandbox.
+
+## If `npm run dev` stops on Windows
+
+What we measured on a 16 GB Windows laptop (November 2026):
+
+- The dev server grows to about **4 GB** of memory once every screen has been compiled
+  (Turbopack keeps each compiled route in memory). With Postgres, Chrome, the test suites and
+  Playwright running at the same time, free memory dropped below 0.5 GB, and once Turbopack
+  crashed with _"OS can't spawn worker thread: Insufficient system resources (os error 1450)"_.
+- Every other "random" stop had exit code 127 and no message, the signature of the process being
+  **ended from outside** (stopping whatever listens on port 3000, a closed terminal, or a tool
+  cleaning up its background processes). It is not Next's memory auto-restart (that prints
+  "approaching the used memory threshold"), and not `next typegen` or `next build` running
+  alongside (both tested: the dev server kept running).
+
+What to do:
+
+1. Run `npm run dev` in **its own terminal** and leave it there.
+2. Don't run `npm test`, `npm run test:e2e` or `npm run build` while you click around in dev on a
+   16 GB machine; or give the dev server room by closing other heavy programs.
+3. Add the project folder to the **Microsoft Defender exclusions** (Next's own advice for
+   Windows), or use a Dev Drive: fewer file-watch delays.
+4. For long screenshot runs, use the production build: `npm run build`, then `npm start`
+   (production checks need real secrets: see docs/deploy.md).
+5. `npm run typecheck` already gives TypeScript 4 GB (it needs about 900 MB for this project).
 
 ## Deploying
 

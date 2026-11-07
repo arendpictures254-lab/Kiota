@@ -8,6 +8,7 @@ import { audit } from "@/lib/audit";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { type Tx, withContext } from "@/lib/db-core";
 import { type Actor, type Deps, ValidationError, clean, ctxOf } from "@/lib/service-kit";
+import { settingsIn } from "@/lib/settings/service";
 import { isSchoolDay, isoDay, nairobiDate } from "./rules";
 
 export const canManageStaffAttendance = (p: Actor["permissions"]) =>
@@ -192,10 +193,12 @@ export async function staffMonthly(
   const from = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
   const end = new Date(Date.UTC(Number(m[1]), Number(m[2]), 0));
   const to = end < today ? end : today;
-  const schoolDays: string[] = [];
-  for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86_400_000))
-    if (isSchoolDay(d)) schoolDays.push(isoDay(d));
   return withContext(db, ctxOf(actor), async (tx) => {
+    // School days so far this month, from the school week.
+    const week = await settingsIn(tx, actor.schoolId);
+    const schoolDays: string[] = [];
+    for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86_400_000))
+      if (isSchoolDay(d, week)) schoolDays.push(isoDay(d));
     const [staff, rows] = await Promise.all([
       staffList(tx, actor.schoolId),
       tx.staffAttendance.findMany({

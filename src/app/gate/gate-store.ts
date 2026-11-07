@@ -2,7 +2,7 @@
  * The gate phone's own storage (IndexedDB): the downloaded bundle of passes and the queue of
  * exits and returns not yet sent. Survives reloads and having no connection.
  */
-import type { GatePass } from "@/lib/leaveout/gate";
+import type { GateCard, GatePass } from "@/lib/leaveout/gate";
 
 export type Bundle = {
   school: { id: string; name: string };
@@ -10,6 +10,8 @@ export type Bundle = {
   generatedAt: string;
   /** How early before the leave time a child may go (the school's setting). */
   earlyExitMinutes?: number;
+  /** Student ID cards (older bundles have none). */
+  cards?: GateCard[];
   passes: GatePass[];
 };
 

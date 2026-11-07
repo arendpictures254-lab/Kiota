@@ -7,7 +7,11 @@ import { parseDay } from "@/lib/attendance/rules";
 import { resolveBoarderAlert, submitRegister } from "@/lib/attendance/service";
 import { markStaff, tapStaffAttendance } from "@/lib/attendance/staff";
 import { kickMessageWorker } from "@/lib/messaging/worker-loop";
-import { saveAttendanceSession, updateAbsenceSettings } from "@/lib/settings/service";
+import {
+  saveAttendanceSession,
+  updateAbsenceSettings,
+  updateSchoolWeek,
+} from "@/lib/settings/service";
 import { ValidationError } from "@/lib/service-kit";
 
 export async function submitRegisterAction(_s: FormState, form: FormData): Promise<FormState> {
@@ -86,6 +90,19 @@ export async function absenceSettingsAction(_s: FormState, form: FormData): Prom
 export async function sessionAction(_s: FormState, form: FormData): Promise<FormState> {
   const r = await attempt(
     async () => saveAttendanceSession(deps, await currentActor(), formObject(form)),
+    "Saved.",
+  );
+  revalidatePath("/dashboard/attendance", "layout");
+  return r;
+}
+
+export async function schoolWeekAction(_s: FormState, form: FormData): Promise<FormState> {
+  const r = await attempt(
+    async () =>
+      updateSchoolWeek(deps, await currentActor(), {
+        days: form.getAll("days"),
+        saturdayLevels: form.getAll("saturdayLevels"),
+      }),
     "Saved.",
   );
   revalidatePath("/dashboard/attendance", "layout");

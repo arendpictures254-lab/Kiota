@@ -74,7 +74,13 @@ src/lib/attendance/           Attendance: rules (pure), summary (pure), service 
 src/app/dashboard/attendance/ Register, absent boarders, reports + export, staff, settings
 src/lib/idcards/              Student ID cards: card-token (KC1, isomorphic), service, pdf (CR80)
 src/lib/students/photos.ts    Photos: original kept + 4:5 portrait (sharp); photo-match (pure)
-src/lib/settings/service.ts   School settings: leave-out rules and reasons, register times
+src/lib/settings/service.ts   School settings: leave-out rules and reasons, register times,
+                              the school week
+src/lib/stores/               Stores: stock.ts (pure: units, packs, weighted average cost,
+                              variance, expiry), service (setup, movements), meals, uniforms,
+                              stocktake, reports (widget, digest, Excel)
+src/app/dashboard/stores/     Stores hub, items, receive, meals, kitchen (cook), uniforms,
+                              stock-takes, reports + export, setup
 src/app/a/[token]/            "Tap to approve" link in the collector SMS (opens the portal)
 src/app/dashboard/leaveouts/  Requests, approvals, passes (A5), who is out, half term, reports
 src/lib/db-guard.ts           School-wall guard for Prisma queries (development and tests)
@@ -116,6 +122,8 @@ docs/messaging.md             Messaging, and what Africa's Talking, Meta and Saf
 docs/parent-portal.md         Parent portal, and how to try it on a phone over Wi-Fi
 docs/leaveouts.md             Leave-outs and the gate, and trying the scanner on a phone
 docs/attendance.md            Attendance, absence alerts, staff attendance, photos, ID cards
+docs/stores.md                Stores, meals and ration scales, uniforms, stock-takes, and why
+                              stock is valued at weighted average cost
 scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
 docs/samples/                 Ready-filled import files for the seeded Bahari Academy
 docker-compose.yml            Local PostgreSQL with Docker (`npm run db:up`)
@@ -185,6 +193,12 @@ has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
   due (a correction cancels them); boarders alert `boarding.alerts` staff in the app first.
   Staff attendance rows are only ever the caller's own (`app_my_membership_id()`) unless
   `staff_attendance.manage`. Never record a location.
+- **Stores:** `stock_movements` is append-only like money; quantities are integers in thousandths
+  of the base unit (`_milli`), values integer cents; stock on hand and value are always sums of
+  movements, never typed. Take stock out only through `takeOut` (per-item lock, weighted
+  average cost, refuses more than on hand). Uniform charges go through the fees module
+  (`postCharge` / `reverseCharge`), never straight to the ledger. The cook (`kitchen.confirm`)
+  can never move stock (RLS) and may only update the served columns of a meal issue.
 - **ID cards:** the QR is a `KC1` token naming the card (never student details); a reissue
   revokes the old card. The gate reads cards only through `app_gate_card()`.
 - **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost

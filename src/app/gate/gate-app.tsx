@@ -183,7 +183,32 @@ export function GateApp({ schoolName }: { schoolName: string }) {
           // offline after all
         }
       }
-      if (!r) return show(null, undefined, { valid: false, reason: "cannot_check" });
+      if (!r) {
+        // Offline: the signature was checked above; the card list came with the bundle.
+        const cached = bundle?.cards?.find((x) => x.id === c.cardId && x.nonce === c.nonce);
+        if (!cached || !bundle?.publicKey)
+          return show(null, undefined, { valid: false, reason: "cannot_check" });
+        if (!cached.live)
+          return show(
+            null,
+            "This card was replaced (lost or reissued): it no longer works.",
+            notFound,
+          );
+        const pass =
+          bundle.passes.find(
+            (p) =>
+              p.studentId === cached.studentId && (p.status === "approved" || p.status === "out"),
+          ) ?? null;
+        const student: CardStudent = {
+          name: cached.name ?? "",
+          admissionNumber: cached.admissionNumber ?? "",
+          classLabel: cached.classLabel ?? "",
+          boarder: !!cached.boarder,
+          photo: pass?.photo ?? null,
+        };
+        if (pass) return show(pass, undefined, undefined, student);
+        return show(null, undefined, { valid: false, reason: "no_leaveout" }, student);
+      }
       if (!r.found) return show(null, "This card is not known to Kiota.", notFound);
       if (!r.live)
         return show(
@@ -526,7 +551,7 @@ export function GateApp({ schoolName }: { schoolName: string }) {
                 />
               ) : (
                 <p className="rounded-xl bg-status-due/15 p-4 text-center font-semibold text-status-due">
-                  No photo on file
+                  No photo to show: check the student carefully
                 </p>
               )}
               <p className="text-sm font-semibold tracking-wide text-ink/60 uppercase">
