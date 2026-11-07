@@ -81,6 +81,14 @@ src/lib/stores/               Stores: stock.ts (pure: units, packs, weighted ave
                               stocktake, reports (widget, digest, Excel)
 src/app/dashboard/stores/     Stores hub, items, receive, meals, kitchen (cook), uniforms,
                               stock-takes, reports + export, setup
+src/lib/academics/            Academics: grading.ts (pure, isomorphic: levels, weighted results,
+                              means, positions, mark parsing), setup (schemes, assessments,
+                              teaching, competencies, comment bank), marks (entry, submit,
+                              Excel), results (computing, sign-off workflow), comments,
+                              reportcards + pdf (A4, verification QR)
+src/app/dashboard/academics/  Hub, mark grid (desktop) / list (phone), results and sign-off,
+                              comments, report preview, print (PDF), setup screens
+src/app/site/v/[token]/       Public report card check (kiota.app/v/<code>; 404s in src/proxy.ts)
 src/app/a/[token]/            "Tap to approve" link in the collector SMS (opens the portal)
 src/app/dashboard/leaveouts/  Requests, approvals, passes (A5), who is out, half term, reports
 src/lib/db-guard.ts           School-wall guard for Prisma queries (development and tests)
@@ -122,6 +130,7 @@ docs/messaging.md             Messaging, and what Africa's Talking, Meta and Saf
 docs/parent-portal.md         Parent portal, and how to try it on a phone over Wi-Fi
 docs/leaveouts.md             Leave-outs and the gate, and trying the scanner on a phone
 docs/attendance.md            Attendance, absence alerts, staff attendance, photos, ID cards
+docs/academics.md             Grading, mark entry, sign-off, report cards and verification
 docs/stores.md                Stores, meals and ration scales, uniforms, stock-takes, and why
                               stock is valued at weighted average cost
 scripts/sms-simulate.ts       Fake SMS delivery reports (`npm run sms:simulate`)
@@ -199,6 +208,16 @@ has no schoolId condition (file:line)` otherwise. Raw SQL is not checked: write
   average cost, refuses more than on hand). Uniform charges go through the fees module
   (`postCharge` / `reverseCharge`), never straight to the ledger. The cook (`kitchen.confirm`)
   can never move stock (RLS) and may only update the served columns of a meal issue.
+- **Academics:** grading schemes, assessments and weights are configuration (Kenyan defaults from
+  `kiota_academic_defaults()`); each subject's weights must total 100. Marks are integers in
+  tenths; Absent/Exempt are statuses, never zero, and are left out of averages. Only the
+  subject's assigned teacher writes its marks (`app_can_write_mark`, RLS); after the class
+  teacher signs off, only `marks.unlock` with a reason, audited before/after
+  (`marks.change_locked`). Subject teachers get names only through `app_mark_sheet_students`,
+  never the students table. Released results are final (trigger); the verification page shows
+  only school, name, term and release date (`app_verify_report_card`).
+- **Daily jobs** (the 07:00 stores digest) run in the worker loop as the school's automatic
+  member, once per school per day (`scheduled_runs`, `app_due_daily_job_schools`).
 - **ID cards:** the QR is a `KC1` token naming the card (never student details); a reissue
   revokes the old card. The gate reads cards only through `app_gate_card()`.
 - **Messaging:** queue through `src/lib/messaging` (never call a provider from a screen). The cost

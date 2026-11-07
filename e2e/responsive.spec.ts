@@ -61,8 +61,46 @@ test.beforeAll(async () => {
         bahari,
       ])
     ).id,
+    ...(await academicIds(one, bahari)),
   };
 });
+
+/** Term 3 2026, two streams, the junior English subject and a Grade 7 East student. */
+async function academicIds(
+  one: (sql: string, params?: unknown[]) => Promise<Record<string, string>>,
+  school: string,
+) {
+  const stream = async (cls: string, name: string) =>
+    (
+      await one(
+        "SELECT st.id FROM streams st JOIN classes c ON c.id = st.class_id WHERE st.school_id = $1 AND c.name = $2 AND st.name = $3",
+        [school, cls, name],
+      )
+    ).id;
+  const g7East = await stream("Grade 7", "East");
+  return {
+    term3: (
+      await one(
+        "SELECT t.id FROM terms t JOIN academic_years y ON y.id = t.academic_year_id WHERE t.school_id = $1 AND t.name = 'Term 3' AND y.name = '2026'",
+        [school],
+      )
+    ).id,
+    g7West: await stream("Grade 7", "West"),
+    g8East: await stream("Grade 8", "East"),
+    english: (
+      await one(
+        "SELECT s.id FROM subjects s JOIN levels l ON l.id = s.level_id WHERE s.school_id = $1 AND l.key = 'junior' AND s.name = 'English'",
+        [school],
+      )
+    ).id,
+    g7EastStudent: (
+      await one(
+        "SELECT id FROM students WHERE school_id = $1 AND stream_id = $2 ORDER BY admission_number LIMIT 1",
+        [school, g7East],
+      )
+    ).id,
+  };
+}
 
 test.afterAll(async () => {
   await db.query("DELETE FROM sessions WHERE user_agent = 'Kiota responsive test'");

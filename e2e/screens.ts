@@ -50,6 +50,13 @@ export type Ids = {
   /** Grade 7 East (Grace Wanjiru's stream) and the Morning register, for the register screen. */
   g7East: string;
   morning: string;
+  /** Academics (Term 3 2026): Grade 7 West English (Grace's sheet), Grade 8 East (waiting for
+   * approval) and a released Grade 7 East student. */
+  term3: string;
+  g7West: string;
+  g8East: string;
+  english: string;
+  g7EastStudent: string;
 };
 
 export type Screen = {
@@ -90,6 +97,22 @@ export const SCREENS: Screen[] = [
   { name: "stores-stocktakes", role: "storekeeper", path: () => "/dashboard/stores/stocktakes" },
   { name: "stores-reports", role: "director", path: () => "/dashboard/stores/reports" },
   { name: "kitchen", role: "cook", path: () => "/dashboard/stores/kitchen" },
+  { name: "academics", role: "teacher", path: (i) => `/dashboard/academics?term=${i.term3}` },
+  {
+    name: "mark-grid",
+    role: "teacher",
+    path: (i) => `/dashboard/academics/marks/${i.g7West}/${i.english}?term=${i.term3}`,
+  },
+  {
+    name: "results-signoff",
+    role: "principal",
+    path: (i) => `/dashboard/academics/results/${i.g8East}?term=${i.term3}`,
+  },
+  {
+    name: "report-card",
+    role: "principal",
+    path: (i) => `/dashboard/academics/report/${i.g7East}/${i.g7EastStudent}?term=${i.term3}`,
+  },
   { name: "gate", role: "guard", path: () => "/gate" },
   { name: "staff", role: "director", path: () => "/dashboard/staff" },
   { name: "setup", role: "director", path: () => "/dashboard/setup" },

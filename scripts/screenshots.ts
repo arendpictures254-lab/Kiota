@@ -74,6 +74,32 @@ async function main() {
         where: { schoolId: bahari.id, name: "Morning" },
       })
     ).id,
+    term3: (
+      await owner.term.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "Term 3", academicYear: { name: "2026" } },
+      })
+    ).id,
+    g7West: (
+      await owner.stream.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "West", class: { name: "Grade 7" } },
+      })
+    ).id,
+    g8East: (
+      await owner.stream.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "East", class: { name: "Grade 8" } },
+      })
+    ).id,
+    english: (
+      await owner.subject.findFirstOrThrow({
+        where: { schoolId: bahari.id, name: "English", level: { key: "junior" } },
+      })
+    ).id,
+    g7EastStudent: (
+      await owner.student.findFirstOrThrow({
+        where: { schoolId: bahari.id, stream: { name: "East", class: { name: "Grade 7" } } },
+        orderBy: { admissionNumber: "asc" },
+      })
+    ).id,
   };
 
   mkdirSync(out, { recursive: true });

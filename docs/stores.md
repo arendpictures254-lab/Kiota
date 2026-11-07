@@ -102,8 +102,9 @@ listed.
 ## Alerts and reports
 
 - **Low stock** (at or below the reorder level) and **expiring soon** (14 days) show on the
-  storekeeper's and Director's dashboards, and in a daily in-app digest ("Stores today") made on
-  their first visit of the day. No SMS for these.
+  storekeeper's and Director's dashboards, and in a daily in-app digest ("Stores today") made by a
+  background job at 07:00 Nairobi time on school days (once per school, even with several
+  servers). No SMS for these.
 - Reports (Director, Principal, Bursar: `stores.reports`): stock on hand and value per store,
   movements by date range, consumption per item, cost per meal and per student with the weekly
   trend, variance history, uniform issues and charges, stock-take differences, all exportable to

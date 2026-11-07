@@ -19,7 +19,7 @@ import { dashboardOverview } from "@/lib/dashboard/service";
 import { BoardersToCheck, RegistersToTake, StaffDayCard } from "./attendance-cards";
 import { AttendanceGlance } from "./attendance/widgets";
 import { StoresWidget } from "./stores/widget";
-import { canSeeStoreReports, ensureDailyDigest, storesWidget } from "@/lib/stores/reports";
+import { canSeeStoreReports, storesWidget } from "@/lib/stores/reports";
 import { db } from "@/lib/db";
 import { kes, receiptNo } from "@/lib/fees/allocation";
 import { whenText } from "@/lib/leaveout/rules";
@@ -140,7 +140,6 @@ async function Dashboard() {
   // Row-level security only returns this person's own notifications.
   const p = ctx.permissions;
   // The stores' daily digest (low stock, expiring soon) is made on the first visit of the day.
-  if (p.has("stores.setup")) await ensureDailyDigest(deps, actor).catch(() => false);
   const showStores = canSeeStoreReports(p) || p.has("stores.setup");
   const [notifications, o, staffDay, registers, today, boarders, stores] = await Promise.all([
     db(ctx.dbContext).notification.findMany({

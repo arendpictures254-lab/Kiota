@@ -1,12 +1,14 @@
 /**
  * Stores reports and dashboard figures: stock on hand and value, low stock and expiring soon,
  * cost per meal and per student, variances, uniform charges and stock-take differences, plus the
- * Excel export and the daily in-app digest. All values come from the stock ledger.
+ * Excel export and the daily in-app digest (07:00 background job). All values come from the stock ledger.
  */
 import ExcelJS from "exceljs";
+import type { PrismaClient } from "@/generated/prisma/client";
 import { ForbiddenError } from "@/lib/auth/permissions";
 import { type Tx, withContext } from "@/lib/db-core";
 import { notifyStaffWith } from "@/lib/leaveout/notify";
+import { messagingActor } from "@/lib/messaging/system";
 import { type Actor, type Deps, ctxOf } from "@/lib/service-kit";
 import { isoDay, nairobiDate } from "@/lib/attendance/rules";
 import { assertSeeStores, itemPositions } from "./service";
@@ -510,29 +512,38 @@ export async function exportStoresWorkbook(
 
 /**
  * The daily in-app digest (low stock and expiring soon), to the storekeeper and Director
- * (stores.setup): made once a day per school, the first time one of them opens the dashboard.
- * No SMS for these.
+ * (stores.setup). A background job (src/lib/messaging/worker-loop.ts) makes it at 07:00 Nairobi
+ * time on school days, once per school, as the school's automatic member. No SMS for these.
  */
-export async function ensureDailyDigest({ db }: Deps, actor: Actor, now = new Date()) {
-  if (!actor.permissions.has("stores.setup")) return false;
-  return withContext(db, ctxOf(actor), async (tx) => {
-    const today = nairobiDate(now);
-    const start = new Date(today.getTime() - 3 * 3600_000); // midnight in Nairobi
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`stores-digest:${actor.schoolId}`}))`;
-    const mine = await tx.membership.findFirst({
-      where: { schoolId: actor.schoolId, userId: actor.userId },
-      select: { id: true },
-    });
-    const sent = await tx.notification.count({
-      where: {
-        schoolId: actor.schoolId,
-        membershipId: mine?.id ?? "",
-        title: "Stores today",
-        createdAt: { gte: start },
-      },
-    });
-    if (sent) return false;
-    const { low, expiring } = await alertsIn(tx, actor.schoolId, now);
+export const DIGEST_JOB = "stores_digest";
+export const DIGEST_HOUR = 7;
+
+/** Every school whose digest is due now. One school's problem never holds up another's. */
+export async function runStoresDigests(db: PrismaClient, now = new Date()) {
+  const schools = await db.$queryRaw<{ id: string }[]>`
+    SELECT app_due_daily_job_schools AS id
+    FROM app_due_daily_job_schools(${DIGEST_JOB}, ${now}::timestamptz, ${DIGEST_HOUR}::int)`;
+  let made = 0;
+  for (const { id: schoolId } of schools) {
+    try {
+      if (await storesDigestFor(db, schoolId, now)) made++;
+    } catch (err) {
+      console.error(`[stores] digest for school ${schoolId} failed`, err);
+    }
+  }
+  return made;
+}
+
+async function storesDigestFor(db: PrismaClient, schoolId: string, now: Date) {
+  const sys = await messagingActor(db, schoolId);
+  return withContext(db, { userId: sys.userId, schoolId }, async (tx) => {
+    // Claim today's run first: a second server (or tick) finds it taken.
+    const claimed = await tx.$executeRaw`
+      INSERT INTO scheduled_runs (school_id, job, run_on)
+      VALUES (${schoolId}::uuid, ${DIGEST_JOB}, ${nairobiDate(now)}::date)
+      ON CONFLICT DO NOTHING`;
+    if (!claimed) return false;
+    const { low, expiring } = await alertsIn(tx, schoolId, now);
     if (!low.length && !expiring.length) return false;
     const parts = [
       low.length
@@ -550,7 +561,7 @@ export async function ensureDailyDigest({ db }: Deps, actor: Actor, now = new Da
             .join(", ")}.`
         : null,
     ].filter(Boolean);
-    await notifyStaffWith(tx, actor.schoolId, ["stores.setup"], {
+    await notifyStaffWith(tx, schoolId, ["stores.setup"], {
       title: "Stores today",
       body: parts.join(" "),
       link: "/dashboard/stores",

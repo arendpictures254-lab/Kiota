@@ -158,7 +158,15 @@ describe("a user in School A", () => {
 
 describe("a request with no school set", () => {
   it("sees no school rows at all", async () => {
-    for (const db of [appUnguarded, scopedDb(appUnguarded, { userId: userA.id, schoolId: null })]) {
+    // One client type for both (the union of two client types is too deep for TypeScript).
+    const clients = [
+      appUnguarded,
+      scopedDb(appUnguarded, {
+        userId: userA.id,
+        schoolId: null,
+      }) as unknown as typeof appUnguarded,
+    ];
+    for (const db of clients) {
       expect(await db.membership.findMany()).toEqual([]);
       expect(await db.membershipRole.findMany()).toEqual([]);
       expect(await db.permissionGrant.findMany()).toEqual([]);

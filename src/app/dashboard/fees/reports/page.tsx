@@ -7,7 +7,12 @@ import { Button, Card, Loading, Notice, Select } from "@/components/ui";
 import { deps } from "@/lib/actions";
 import { kes, receiptNo } from "@/lib/fees/allocation";
 import { METHODS } from "@/lib/fees/payments";
-import { collectedVsExpected, dailyCollection, defaulters } from "@/lib/fees/reports";
+import {
+  collectedVsExpected,
+  dailyCollection,
+  defaultFeeTerm,
+  defaulters,
+} from "@/lib/fees/reports";
 import { getFeeSetup } from "@/lib/fees/setup";
 import { canSendFeeReminders } from "@/lib/messaging/service";
 import { formatPhone } from "@/lib/phone";
@@ -58,7 +63,7 @@ async function Reports({ searchParams }: Pick<Props, "searchParams">) {
     value: t.id,
     label: `${t.name} ${t.academicYear.name}`,
   }));
-  const termId = one(sp.termId) || setup.terms[setup.terms.length - 1]?.id || "";
+  const termId = one(sp.termId) || defaultFeeTerm(setup.terms)?.id || "";
   const tab = (key: string, label: string) => (
     <Link
       href={`?view=${key}${termId ? `&termId=${termId}` : ""}`}

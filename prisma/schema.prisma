@@ -152,12 +152,13 @@ model Membership {
   createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school          School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user            User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  school          School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   roles           MembershipRole[]
   grants          PermissionGrant[]
   streams         Stream[]
   staffAttendance StaffAttendance[]
+  teaching        TeachingAssignment[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -263,20 +264,25 @@ model LevelTemplate {
 }
 
 model Level {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId     String   @map("school_id") @db.Uuid
-  key          String
-  name         String
-  sortOrder    Int      @map("sort_order")
-  enabled      Boolean  @default(false)
-  nextLevelKey String?  @map("next_level_key")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  key             String
+  name            String
+  sortOrder       Int      @map("sort_order")
+  enabled         Boolean  @default(false)
+  nextLevelKey    String?  @map("next_level_key")
+  /// Grading scheme for this level (null: the scheme whose default_level_keys include the key).
+  gradingSchemeId String?  @map("grading_scheme_id") @db.Uuid
+  /// Positions in stream and class on reports (null: the scheme's default).
+  showPositions   Boolean? @map("show_positions")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   classes       Class[]
   subjects      Subject[]
   pathways      Pathway[]
   feeStructures FeeStructure[]
+  assessments   Assessment[]
 
   @@unique([schoolId, key])
   @@unique([schoolId, id])
@@ -315,6 +321,7 @@ model Stream {
   classTeacher Membership?          @relation(fields: [schoolId, classTeacherMembershipId], references: [schoolId, id], onDelete: Restrict)
   students     Student[]
   registers    AttendanceRegister[]
+  teaching     TeachingAssignment[]
 
   @@unique([classId, name])
   @@unique([schoolId, id])
@@ -378,6 +385,7 @@ model Term {
 
   academicYear  AcademicYear   @relation(fields: [schoolId, academicYearId], references: [schoolId, id], onDelete: Restrict)
   feeStructures FeeStructure[]
+  assessments   Assessment[]
 
   @@unique([academicYearId, name])
   @@unique([schoolId, id])
@@ -409,8 +417,9 @@ model Subject {
   code      String?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  level    Level            @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  level    Level                @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
   students StudentSubject[]
+  teaching TeachingAssignment[]
 
   @@unique([levelId, name])
   @@unique([schoolId, id])
@@ -471,6 +480,7 @@ model Student {
   absenceAlerts   AbsenceAlert[]
   cards           StudentCard[]
   uniformIssues   UniformIssue[]
+  marks           Mark[]
   guardians       GuardianLink[]
   subjects        StudentSubject[]
   documents       StudentDocument[]
@@ -1414,6 +1424,11 @@ model SchoolSettings {
   cardPhone                String?  @map("card_phone")
   cardEmail                String?  @map("card_email")
   cardAddress              String?  @map("card_address")
+  /// Report cards: classic or modern.
+  reportTemplate           String   @default("classic") @map("report_template")
+  /// Report cards: show the fee balance and next term's opening date.
+  reportShowFeeBalance     Boolean  @default(true) @map("report_show_fee_balance")
+  reportShowNextTerm       Boolean  @default(true) @map("report_show_next_term")
   updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
@@ -1816,4 +1831,261 @@ model StocktakeLine {
 
   @@unique([schoolId, stocktakeId, itemId])
   @@map("stocktake_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled jobs
+// ---------------------------------------------------------------------------
+
+/// Daily background jobs that already ran for a school (e.g. the 07:00 stores digest), so each
+/// runs once a day even with several servers.
+model ScheduledRun {
+  schoolId String   @map("school_id") @db.Uuid
+  job      String
+  runOn    DateTime @map("run_on") @db.Date
+  ranAt    DateTime @default(now()) @map("ran_at") @db.Timestamptz(3)
+
+  @@id([schoolId, job, runOn])
+  @@map("scheduled_runs")
+}
+
+// ---------------------------------------------------------------------------
+// Academics: grading, assessments, marks, results and report cards
+// ---------------------------------------------------------------------------
+
+/// A grading scheme (configuration, per school): its levels turn a percentage into a level or
+/// grade with points. Kenyan defaults are copied to every school and can be edited.
+model GradingScheme {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String   @map("school_id") @db.Uuid
+  name             String
+  /// A warning shown with the scheme, e.g. "Confirm against current KNEC guidance".
+  note             String?
+  /// Levels (by key) that use this scheme unless the level names another.
+  defaultLevelKeys String[] @default([]) @map("default_level_keys")
+  /// Positions in stream and class, for levels using this scheme that have not chosen.
+  positionsDefault Boolean  @default(false) @map("positions_default")
+  /// Round to a whole mark before grading (89.5 becomes 90).
+  roundMarks       Boolean  @default(true) @map("round_marks")
+  /// The 4-level rubric core competencies and values are rated on.
+  forCompetencies  Boolean  @default(false) @map("for_competencies")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  levels GradingLevel[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, id])
+  @@map("grading_schemes")
+}
+
+/// One level or grade of a scheme: code (EE1, A-), label, points and the mark range (percent).
+model GradingLevel {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String  @map("school_id") @db.Uuid
+  schemeId String  @map("scheme_id") @db.Uuid
+  code     String
+  label    String
+  points   Int
+  minMark  Int     @map("min_mark")
+  maxMark  Int     @map("max_mark")
+  /// Suggested comment for a student at this level.
+  comment  String?
+  position Int
+
+  scheme GradingScheme @relation(fields: [schoolId, schemeId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schemeId, code])
+  @@unique([schoolId, id])
+  @@map("grading_levels")
+}
+
+/// An assessment in a term for a level (CAT 1, Mid-term, End-term...): its maximum marks and the
+/// weight it carries in the term result. Subjects may override the weight (AssessmentWeight);
+/// each subject's weights add up to 100.
+model Assessment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  termId    String   @map("term_id") @db.Uuid
+  levelId   String   @map("level_id") @db.Uuid
+  name      String
+  maxMarks  Int      @map("max_marks")
+  /// Weight in percent for every subject that has no override.
+  weight    Int
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  term    Term               @relation(fields: [schoolId, termId], references: [schoolId, id], onDelete: Restrict)
+  level   Level              @relation(fields: [schoolId, levelId], references: [schoolId, id], onDelete: Restrict)
+  weights AssessmentWeight[]
+  marks   Mark[]
+
+  @@unique([termId, levelId, name])
+  @@unique([schoolId, id])
+  @@map("assessments")
+}
+
+/// A subject's own weight for an assessment (0 = this assessment does not count for it).
+model AssessmentWeight {
+  schoolId     String @map("school_id") @db.Uuid
+  assessmentId String @map("assessment_id") @db.Uuid
+  subjectId    String @map("subject_id") @db.Uuid
+  weight       Int
+
+  assessment Assessment @relation(fields: [schoolId, assessmentId], references: [schoolId, id], onDelete: Cascade)
+
+  @@id([assessmentId, subjectId])
+  @@map("assessment_weights")
+}
+
+/// Who teaches which subject to which stream. Only that teacher enters its marks.
+model TeachingAssignment {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  streamId     String   @map("stream_id") @db.Uuid
+  subjectId    String   @map("subject_id") @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  stream  Stream     @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+  subject Subject    @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  teacher Membership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([streamId, subjectId])
+  @@index([schoolId, membershipId])
+  @@map("teaching_assignments")
+}
+
+/// One student's mark for one subject in one assessment. Absent and Exempt are statuses, never
+/// zero. Scores are in tenths of a mark (73.5 = 735).
+model Mark {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  assessmentId String   @map("assessment_id") @db.Uuid
+  subjectId    String   @map("subject_id") @db.Uuid
+  streamId     String   @map("stream_id") @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  /// score, absent or exempt
+  status       String
+  scoreTenths  Int?     @map("score_tenths")
+  enteredById  String   @map("entered_by_id") @db.Uuid
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  assessment Assessment @relation(fields: [schoolId, assessmentId], references: [schoolId, id], onDelete: Restrict)
+  student    Student    @relation(fields: [schoolId, studentId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([assessmentId, subjectId, studentId])
+  @@index([schoolId, streamId, subjectId])
+  @@map("marks")
+}
+
+/// A teacher said a stream's marks for one subject and assessment are complete.
+model MarkSubmission {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  assessmentId  String   @map("assessment_id") @db.Uuid
+  subjectId     String   @map("subject_id") @db.Uuid
+  streamId      String   @map("stream_id") @db.Uuid
+  submittedById String   @map("submitted_by_id") @db.Uuid
+  submittedAt   DateTime @default(now()) @map("submitted_at") @db.Timestamptz(3)
+
+  @@unique([assessmentId, subjectId, streamId])
+  @@index([schoolId, streamId])
+  @@map("mark_submissions")
+}
+
+/// A stream's results for a term: draft, signed_off (class teacher; marks lock), approved
+/// (Principal or Director of Studies), released (report cards issued).
+model StreamResult {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  termId         String    @map("term_id") @db.Uuid
+  streamId       String    @map("stream_id") @db.Uuid
+  status         String    @default("draft")
+  signedOffById  String?   @map("signed_off_by_id") @db.Uuid
+  signedOffAt    DateTime? @map("signed_off_at") @db.Timestamptz(3)
+  approvedById   String?   @map("approved_by_id") @db.Uuid
+  approvedAt     DateTime? @map("approved_at") @db.Timestamptz(3)
+  releasedById   String?   @map("released_by_id") @db.Uuid
+  releasedAt     DateTime? @map("released_at") @db.Timestamptz(3)
+  /// Why the approver sent it back to the class teacher.
+  returnedReason String?   @map("returned_reason")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([termId, streamId])
+  @@unique([schoolId, id])
+  @@map("stream_results")
+}
+
+/// The class teacher's and principal's comments on a student's term report.
+model ReportComment {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId            String   @map("school_id") @db.Uuid
+  termId              String   @map("term_id") @db.Uuid
+  studentId           String   @map("student_id") @db.Uuid
+  classTeacherComment String?  @map("class_teacher_comment")
+  principalComment    String?  @map("principal_comment")
+  updatedById         String   @map("updated_by_id") @db.Uuid
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([termId, studentId])
+  @@map("report_comments")
+}
+
+/// Suggested comments per level, by band (a grading level code such as EE or ME) and by who
+/// writes them (class_teacher or principal). The school edits its own bank.
+model CommentBank {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  levelId   String   @map("level_id") @db.Uuid
+  author    String
+  bandCode  String   @map("band_code")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([schoolId, levelId])
+  @@map("comment_bank")
+}
+
+/// CBC core competencies and values (configuration), rated by the class teacher each term.
+model Competency {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String  @map("school_id") @db.Uuid
+  /// competency or value
+  kind     String
+  name     String
+  position Int
+  active   Boolean @default(true)
+
+  @@unique([schoolId, kind, name])
+  @@unique([schoolId, id])
+  @@map("competencies")
+}
+
+model CompetencyRating {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  termId       String   @map("term_id") @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  competencyId String   @map("competency_id") @db.Uuid
+  /// Points on the rubric (4 = EE ... 1 = BE).
+  rating       Int
+  ratedById    String   @map("rated_by_id") @db.Uuid
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([termId, studentId, competencyId])
+  @@map("competency_ratings")
+}
+
+/// A released report card: its token is what the QR code's verification link carries.
+model ReportCard {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  termId     String   @map("term_id") @db.Uuid
+  streamId   String   @map("stream_id") @db.Uuid
+  studentId  String   @map("student_id") @db.Uuid
+  token      String   @unique
+  releasedAt DateTime @map("released_at") @db.Timestamptz(3)
+
+  @@unique([termId, studentId])
+  @@map("report_cards")
 }

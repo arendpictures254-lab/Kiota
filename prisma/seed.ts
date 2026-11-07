@@ -6,6 +6,7 @@ import "dotenv/config";
 import { createClient } from "../src/lib/db-core";
 import { seedFees } from "./seed-fees";
 import { seedMessageHistory, seedWallets } from "./seed-messaging";
+import { seedAcademics } from "./seed-academics";
 import { seedAttendance } from "./seed-attendance";
 import { seedStores } from "./seed-stores";
 import { seedLeaveouts } from "./seed-leaveouts";
@@ -20,7 +21,7 @@ export const SEED = {
       name: "Bahari Academy",
       shortName: "BAHARI",
       county: "Kilifi",
-      levelsOffered: ["primary", "junior"],
+      levelsOffered: ["primary", "junior", "legacy_844"],
       staff: [
         { phone: "+254711000001", name: "Amina Said", roles: ["director"] },
         { phone: "+254711000002", name: "Peter Otieno", roles: ["bursar"] },
@@ -34,6 +35,10 @@ export const SEED = {
         { phone: "+254711000010", name: "Ruth Njoroge", roles: ["class_teacher"] },
         { phone: "+254711000011", name: "Omar Hassan", roles: ["storekeeper"] },
         { phone: "+254711000012", name: "Esther Achieng", roles: ["cook"] },
+        { phone: "+254711000013", name: "Samuel Mutua", roles: ["director_of_studies"] },
+        { phone: "+254711000014", name: "Kevin Odhiambo", roles: ["class_teacher"] },
+        { phone: "+254711000013", name: "Samuel Mutua", roles: ["director_of_studies"] },
+        { phone: "+254711000014", name: "Kevin Odhiambo", roles: ["class_teacher"] },
       ],
     },
     {
@@ -139,6 +144,7 @@ async function main() {
     await seedLeaveouts(owner, schoolIds.get("Bahari Academy")!);
     await seedAttendance(owner, schoolIds.get("Bahari Academy")!);
     await seedStores(owner, schoolIds.get("Bahari Academy")!);
+    await seedAcademics(owner, schoolIds.get("Bahari Academy")!);
 
     console.log(
       "Seeded Bahari Academy, Milima School, their students, fees, messaging wallets and the Arend admin.",

@@ -10,6 +10,7 @@
  *  stores.reports  reports                 stores.stocktake.approve  approve stock-takes, variances
  */
 import { audit } from "@/lib/audit";
+import { ensureMessagingMember } from "@/lib/messaging/system";
 import type { PermissionKey } from "@/lib/auth/catalog";
 import { ForbiddenError, assertCan } from "@/lib/auth/permissions";
 import { type Tx, withContext } from "@/lib/db-core";
@@ -161,6 +162,8 @@ export async function receiveStock(
   assertCan(actor.permissions, "stores.receive");
   return withContext(db, ctxOf(actor), async (tx) => {
     const item = await findItem(tx, actor.schoolId, String(raw.itemId ?? ""));
+    // The 07:00 digest runs as the school's automatic member.
+    await ensureMessagingMember(tx, actor.schoolId);
     const packs = clean(raw.packs) ? Number(clean(raw.packs)) : null;
     let quantityMilli: number;
     if (packs !== null) {

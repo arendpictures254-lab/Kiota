@@ -45,6 +45,8 @@ You can type them as `0711 000 001` or `+254711000001`.
 | 0711 000 010 | Ruth Njoroge           | Bahari Academy | Class teacher, Grade 8 East              |
 | 0711 000 011 | Omar Hassan            | Bahari Academy | Storekeeper                              |
 | 0711 000 012 | Esther Achieng         | Bahari Academy | Cook: today's meals, number served       |
+| 0711 000 013 | Samuel Mutua           | Bahari Academy | Director of Studies: exams, approval     |
+| 0711 000 014 | Kevin Odhiambo         | Bahari Academy | Class teacher, Form 4 Blue (8-4-4)       |
 | 0722 000 001 | John Kamau             | Milima School  | Director                                 |
 | 0722 000 002 | Mary Achieng           | Milima School  | Bursar                                   |
 | 0722 000 003 | David Kiprono          | Milima School  | Class teacher                            |
@@ -57,9 +59,13 @@ Each number can request 3 codes per 15 minutes.
 Grace Wanjiru is class teacher of Grade 7 East, so she sees only those 15 students.
 
 **Seeded students.** Bahari Academy has 61 students in Grade 7 and Grade 8 (East and West
-streams), each with one or two guardians, plus houses, dormitories and the 2027 terms.
+streams) and 12 in Form 4 Blue, each with one or two guardians, plus houses, dormitories and the 2027 terms.
 Wanjiku Kamau (0744 000 001) is a parent with Brian at Bahari Academy and Joy at Milima School;
 her Milima link waits for her to confirm in the parent portal (docs/parent-portal.md).
+
+**Seeded academics** (Term 3 2026, docs/academics.md): Grade 7 East released (report cards with
+QR codes), Grade 8 East signed off and waiting for approval, Form 4 Blue (8-4-4) with marks still
+being entered, and Grace's empty English sheet for Grade 7 West.
 
 **Seeded leave-outs** (Bahari Academy, docs/leaveouts.md): one approved pass for today
 (BA/2025/011, ready to scan), one student out (BA/2025/012), one overdue back (BA/2025/013),

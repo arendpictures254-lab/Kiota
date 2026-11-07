@@ -96,6 +96,12 @@ const paths: Record<string, ReactElement> = {
       <path d="M7.5 20v-6h9v6M7.5 17h9" />
     </>
   ),
+  academics: (
+    <>
+      <path d="M2 9.5 12 5l10 4.5-10 4.5z" />
+      <path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9.5V15" />
+    </>
+  ),
   kitchen: (
     <>
       <path d="M4 11h16v2a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z" />

@@ -1,6 +1,7 @@
 /**
  * Host-based routing: one Next.js app serves two addresses.
- *  - Site (kiota.app):     /, /features, ... are served from src/app/site/*.
+ *  - Site (kiota.app):     /, /features, ... are served from src/app/site/*; /v/<code> checks a
+ *                          report card (unknown codes are a real 404).
  *                          App paths (/sign-in, /dashboard, ...) redirect to the app address.
  *  - App (app.kiota.app):  sign-in and the app. / goes to the dashboard; site pages redirect
  *                          to the site address; the internal /site/* paths do not exist here.
@@ -61,6 +62,17 @@ async function receiptLink(req: NextRequest, token: string) {
   return row?.found ? NextResponse.next() : notFound(req);
 }
 
+/** Report card verification links (the QR code): kiota.app/v/<24-character code>. */
+const VERIFY_PAGE = /^\/v\/([^/]+)$/;
+
+async function verifyLink(req: NextRequest, token: string) {
+  if (!/^[A-Za-z0-9_-]{20,40}$/.test(token)) return notFound(req);
+  const { platformDb } = await import("@/lib/db");
+  const [row] = await platformDb.$queryRaw<{ found: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM app_verify_report_card(${token})) AS found`;
+  return row?.found ? internal(req, `/site/v/${token}`) : notFound(req);
+}
+
 export function proxy(req: NextRequest): NextResponse | Promise<NextResponse> {
   const host = (req.headers.get("host") ?? "").toLowerCase();
   const { pathname, search } = req.nextUrl;
@@ -70,6 +82,7 @@ export function proxy(req: NextRequest): NextResponse | Promise<NextResponse> {
     if (hasPrefix(pathname, "/site")) return notFound(req);
     const receipt = RECEIPT_PAGE.exec(pathname);
     if (receipt) return receiptLink(req, receipt[1]);
+    if (VERIFY_PAGE.test(pathname)) return goTo(req, `${SITE_URL}${pathname}`);
     if (pathname === "/") return goTo(req, `${APP_URL}/dashboard`, 307);
     if (SITE_PAGES.includes(pathname)) {
       return goTo(req, `${SITE_URL}${pathname}${search}`);
@@ -82,6 +95,8 @@ export function proxy(req: NextRequest): NextResponse | Promise<NextResponse> {
       return goTo(req, `${APP_URL}${pathname}${search}`);
     }
     if (hasPrefix(pathname, "/site")) return notFound(req);
+    const verify = VERIFY_PAGE.exec(pathname);
+    if (verify) return verifyLink(req, verify[1]);
     return internal(req, pathname === "/" ? "/site" : `/site${pathname}`);
   }
 

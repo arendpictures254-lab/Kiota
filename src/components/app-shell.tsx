@@ -15,6 +15,7 @@ import type { PermissionKey } from "@/lib/auth/catalog";
 import { getCurrentUser, getSchoolContext, hasChildren, listMySchools } from "@/lib/auth/context";
 import { db } from "@/lib/db";
 import { canHandleBoarderAlerts, canTakeAttendance } from "@/lib/attendance/service";
+import { canSeeAcademics } from "@/lib/academics/setup";
 import { canSeeLeaveouts } from "@/lib/leaveout/service";
 import { canSeeMessages } from "@/lib/messaging/service";
 import { canSeeKitchen, canSeeStores } from "@/lib/stores/service";
@@ -48,6 +49,9 @@ export function schoolNavItems(p: Perms): NavItem[] {
   if (canTakeAttendance(p) || canHandleBoarderAlerts(p))
     items.push({ href: "/dashboard/attendance", label: "Attendance", icon: "attendance" });
   if (fees && !feesFirst) items.push({ href: "/dashboard/fees", label: "Fees", icon: "fees" });
+  // After fees: a Director keeps Fees among the phone tabs; teachers have no Fees.
+  if (canSeeAcademics(p))
+    items.push({ href: "/dashboard/academics", label: "Academics", icon: "academics" });
   if (canSeeLeaveouts(p))
     items.push({ href: "/dashboard/leaveouts", label: "Leave-outs", icon: "leaveouts" });
   if (canSeeMessages(p))

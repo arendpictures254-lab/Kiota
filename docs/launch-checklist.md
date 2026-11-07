@@ -189,8 +189,24 @@ Details: docs/stores.md.
 - [ ] **Uniform prices and the vote head** uniforms are charged to (Stores → Setup), agreed with
       the Bursar; check one charge and one return on a real student's statement.
 - [ ] **Monthly stock-take** routine agreed (who counts, who approves).
+- [x] **Daily digest as a background job**: _done: 07:00 Nairobi time on school days._
 - [ ] **Saturday meals**: registers follow the school week, but meal issues can be recorded any
       day; check weekend boarders' numbers are right.
+
+## Academics and report cards
+
+Details: docs/academics.md.
+
+- [ ] **Grading schemes confirmed against current KNEC guidance** (CBC rubric ranges, the junior
+      8-level scale, the provisional senior scale) and the school's own KCSE mark ranges.
+- [ ] **KCSE mean grade rule** agreed with the Director of Studies: Kiota averages the points of
+      every subject taken (not KNEC's best-7 cluster rule).
+- [ ] **Assessments and weights for Term 1 2027** set per level, and **teaching assignments**
+      entered before the first CAT.
+- [ ] **Report card printed on the school's printer** (A4, crest and photos uploaded), and the
+      template chosen; collect a sample of their current card if they want it matched.
+- [ ] **QR verification tested from a phone** against the live kiota.app address.
+- [ ] **Positions**: confirm the school's policy per level (off for CBC by default).
 
 ## Public website
 

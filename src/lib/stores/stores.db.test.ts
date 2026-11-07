@@ -13,7 +13,7 @@ import {
   owner,
 } from "../../../tests/db-helpers";
 import { confirmServed, issueMeal, mealPlan, reviewVariance, setRation } from "./meals";
-import { storesWidget, ensureDailyDigest } from "./reports";
+import { runStoresDigests, storesWidget } from "./reports";
 import {
   adjustStock,
   issueStock,
@@ -448,17 +448,21 @@ describe("stock-takes", () => {
 });
 
 describe("alerts", () => {
-  it("lists items below reorder level and makes one daily digest", async () => {
+  it("lists items below reorder level; the 07:00 job makes one digest on school days", async () => {
     const f = await makeFixture("Alerts");
     const sk = f.storekeeper.actor;
     await receiveStock(deps, sk, { itemId: f.maize.id, quantity: "40", cost: "2000" }); // reorder level 50
     const w = await storesWidget(deps, f.director.actor);
     expect(w.low.map((l) => l.name)).toContain("Maize flour");
-    expect(await ensureDailyDigest(deps, sk)).toBe(true);
-    expect(await ensureDailyDigest(deps, sk)).toBe(false); // once a day
-    const digest = await owner.notification.findMany({
-      where: { schoolId: f.school.id, title: "Stores today" },
-    });
+    const digests = () =>
+      owner.notification.findMany({ where: { schoolId: f.school.id, title: "Stores today" } });
+    // A background job at 07:00 Nairobi time on school days, once per school.
+    await runStoresDigests(app, new Date("2026-11-09T03:59:00Z")); // Monday 06:59
+    await runStoresDigests(app, new Date("2026-11-08T05:00:00Z")); // Sunday 08:00
+    expect(await digests()).toHaveLength(0);
+    await runStoresDigests(app, new Date("2026-11-09T04:00:00Z")); // Monday 07:00
+    await runStoresDigests(app, new Date("2026-11-09T09:00:00Z")); // again at noon
+    const digest = await digests();
     expect(digest.map((d) => d.membershipId).sort()).toEqual(
       [f.director.membership.id, f.storekeeper.membership.id].sort(),
     );

@@ -710,3 +710,19 @@ export async function exportFeesWorkbook({ db }: Deps, actor: Actor): Promise<Bu
   ]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+/** The term fee reports open on: the one running, else the next to start, else the latest. */
+export function defaultFeeTerm<T extends { id: string; startDate: Date; endDate: Date }>(
+  terms: T[],
+  now = new Date(),
+): T | undefined {
+  const day = 86_400_000;
+  const running = terms.find(
+    (t) => t.startDate <= now && now.getTime() < t.endDate.getTime() + day,
+  );
+  if (running) return running;
+  const upcoming = terms
+    .filter((t) => t.startDate > now)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  return upcoming[0] ?? [...terms].sort((a, b) => b.startDate.getTime() - a.startDate.getTime())[0];
+}
